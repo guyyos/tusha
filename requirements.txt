@@ -1,2 +1,4 @@
 nose
 sphinx
+gunicorn
+dash-tools
