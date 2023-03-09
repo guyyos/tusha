@@ -25,7 +25,8 @@ def create_num_to_nums_model(df,target,predictors):
         pred = pm.MutableData("pred", df[predictors].values)
 
         a = pm.Normal("a", mu=mu_hyper_prior, sigma=sd_hyper_prior)
-        b = pm.Lognormal("b", mu=0, sigma=1,dims="predictors")
+        # b = pm.Lognormal("b", mu=0, sigma=1,dims="predictors")
+        b = pm.Normal("b", mu=0, sigma=1,dims="predictors")
         sigma = pm.Uniform("sigma", 0, 50)
 
         mu = pm.Deterministic(f'mu_{target}', a + at.dot(pred,b))
@@ -79,6 +80,9 @@ def create_model(df,target,predictors):
         df[f] = standardize_vec(df[f],feature_means[f],feature_stds[f])
 
     model,idata = create_num_to_nums_model(df,target,predictors)
+
+    print(f"create_model a =  {az.hdi(idata)['a']}")
+    print(f"create_model b =  {az.hdi(idata)['b']}")
 
     def unstand(predictor,target_hdi,mu_hdi,mu_mean,predictor_vals):
         target_hdi = unstandardize_vec(target_hdi,feature_means[target],feature_stds[target])

@@ -16,7 +16,8 @@ def create_plots_with_reg_hdi_lines(df,target,predictors,all_res):
 
         predictor_vals = all_res[predictor][3]
 
-        other_predictor = list(set(predictors).difference(set([predictor])))[0]
+        other_predictors = list(set(predictors).difference(set([predictor])))
+        other_predictor = other_predictors[0] if len(other_predictors)>0 else None
         figs[predictor] = create_scatter_with_reg_hdi_lines(df,target,predictor,other_predictor,target_lower,target_higher,mu_lower,mu_higher,mu_mean,predictor_vals)
 
     return figs
