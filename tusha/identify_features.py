@@ -178,7 +178,12 @@ def identify_series(vals):
 
     num_possible_float = len(df_vals[df_vals['possible_float']])
 
-    if num_possible_float > 0.5*num_vals:
+    if num_possible_float > 0.5*num_unique_vals:
         return FeatureType.NUMERICAL
 
     return FeatureType.CATEGORICAL
+
+
+def identify_cols(df,cols):
+
+    return {col:identify_series(df[col]) for col in cols}
