@@ -302,8 +302,8 @@ def get_model_plots(session_id,df_relations):
 
         print(f'get_model_plots predictors = {predictors}')
 
-        all_res = create_model(df.copy(),target,predictors)
-        figs = create_plots_with_reg_hdi_lines(df,target,predictors,all_res)
+        pred_res = create_model(df.copy(),target,predictors)
+        figs = create_plots_with_reg_hdi_lines(df,target,predictors,pred_res)
         for predictor,fig in figs.items():
             preds = ','.join([f'<b>{p}</b>' if p==predictor else p for p in predictors])
             fig_name = f'[{preds}]<b>→{target}</b>'

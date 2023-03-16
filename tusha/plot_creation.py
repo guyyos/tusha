@@ -1,26 +1,48 @@
 import plotly.graph_objects as go
 import plotly.express as px
+from pandas import DataFrame
 
 
-def create_plots_with_reg_hdi_lines(df,target,predictors,all_res):
+def create_plots_with_reg_hdi_lines(df,target,predictors,pred_res):
     figs = {}
 
     for predictor in predictors:
-        target_lower = all_res[predictor][0][:,0]
-        target_higher = all_res[predictor][0][:,1]
+        ps = pred_res[predictor]
 
-        mu_lower = all_res[predictor][1][:,0]
-        mu_higher = all_res[predictor][1][:,1]
+        if len(ps.cat_codes)>0:
+            #categorical
 
-        mu_mean = all_res[predictor][2]
+            data = []
+            for cat_val,vals,mu_vals in zip(ps.cat_codes,ps.target_pred.values,ps.mu_pred.values):
+                for v,mv in zip(vals,mu_vals):
+                    data.append({predictor:cat_val,target:v,f'{target}_mu':mv})
 
-        predictor_vals = all_res[predictor][3]
+            df_vals = DataFrame(data)
 
-        other_predictors = list(set(predictors).difference(set([predictor])))
-        other_predictor = other_predictors[0] if len(other_predictors)>0 else None
-        figs[predictor] = create_scatter_with_reg_hdi_lines(df,target,predictor,other_predictor,target_lower,target_higher,mu_lower,mu_higher,mu_mean,predictor_vals)
+            figs[predictor] = px.box(df_vals, x=predictor, y=target)
+            figs[f'{predictor}_mu'] = px.box(df_vals, x=predictor, y=f'{target}_mu')
+
+        else:
+
+            target_lower = ps.target_hdi[:,0]
+            target_higher = ps.target_hdi[:,1]
+
+            mu_lower = ps.mu_hdi[:,0]
+            mu_higher = ps.mu_hdi[:,1]
+
+            mu_mean = ps.mu_mean
+
+            predictor_vals = ps.predictor_vals
+
+            other_predictors = list(set(predictors).difference(set([predictor])))
+            other_predictor = other_predictors[0] if len(other_predictors)>0 else None
+            figs[predictor] = create_scatter_with_reg_hdi_lines(df,target,predictor,other_predictor,target_lower,target_higher,mu_lower,mu_higher,mu_mean,predictor_vals)
 
     return figs
+
+
+# def create_box_plot():
+#     graph = px.box(df, x=x_data, y=y_data, color=color_data,notched=True)
 
 
 def create_scatter_with_reg_hdi_lines(df,target,predictor,other_predictor,target_lower,target_higher,mu_lower,mu_higher,mu_mean,predictor_vals):

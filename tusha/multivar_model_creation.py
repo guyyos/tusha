@@ -8,6 +8,7 @@ from scipy.interpolate import griddata
 from scipy.signal import savgol_filter
 import pytensor.tensor as at
 from identify_features import identify_cols,FeatureType
+from base_def import COUNTER_FACTUAL_NUM_POINTS,COUNTER_FACTUAL_SMOOTH_NUM_POINTS,PredictionSummary
 
 
 def standardize_vec(unstd_vec,mean,std):
@@ -166,8 +167,6 @@ def create_num_to_features_model(df,target,categorical_predictors,numerical_pred
 
     return model,idata
 
-COUNTER_FACTUAL_NUM_POINTS = 100
-COUNTER_FACTUAL_SMOOTH_NUM_POINTS = 55  # note that COUNTER_FACTUAL_SMOOTH_NUM_POINTS<COUNTER_FACTUAL_NUM_POINTS
 
 def calc_counterfactual_predictor(df,model,idata,target,active_predictor,categorical_predictors,numerical_predictors,
                                       cat_num_map,categorical_predictors_vals,cat_factors):
@@ -180,7 +179,9 @@ def calc_counterfactual_predictor(df,model,idata,target,active_predictor,categor
     if active_predictor in numerical_predictors:
         df_counterfactual = DataFrame({active_predictor:np.linspace(df[active_predictor].min(), df[active_predictor].max(),COUNTER_FACTUAL_NUM_POINTS)})
     else:
-        df_counterfactual = DataFrame({active_predictor:cat_factors[active_predictor]['cat_feature_codes']})
+        cat_codes = cat_factors[active_predictor]['cat_feature_codes']
+
+        df_counterfactual = DataFrame({active_predictor:cat_codes})
 
     for p in numerical_predictors:
         if p != active_predictor:
@@ -197,9 +198,12 @@ def calc_counterfactual_predictor(df,model,idata,target,active_predictor,categor
         for p in num_pred_cat:
             pm.set_data({f'data_nc[{p}]': df_counterfactual[p].values})
 
-        pm.set_data({"data_num": df_counterfactual[num_pred_no_cat].values})
+        if len(num_pred_no_cat)>0:
+            pm.set_data({"data_num": df_counterfactual[num_pred_no_cat].values})
 
         # use the updated values and predict outcomes and probabilities:
+        # thinned_idata = idata.sel(draw=slice(None, None, 5))
+
         idata_2 = pm.sample_posterior_predictive(
             idata,
             var_names=[target,f'mu_{target}'],
@@ -207,11 +211,22 @@ def calc_counterfactual_predictor(df,model,idata,target,active_predictor,categor
             predictions=True,
         )
         
-    target_hdi = az.hdi(idata_2.predictions)[target]
-    mu_hdi = az.hdi(idata_2.predictions)[f'mu_{target}']
-    mu_mean = az.extract(idata_2.predictions).mean('sample')[f'mu_{target}']
+    return idata_2,df_counterfactual[active_predictor]
 
-    return target_hdi,mu_hdi,mu_mean,df_counterfactual[active_predictor]
+
+def summarize_predictions(idata,predictor,target,predictor_vals,cat_codes):
+    predictions = az.extract(idata,'predictions')
+
+    target_pred = predictions[target]
+    mu_pred = predictions[f'mu_{target}']
+
+    target_hdi = az.hdi(idata.predictions)[target]
+    mu_hdi = az.hdi(idata.predictions)[f'mu_{target}']
+    mu_mean = az.extract(idata.predictions).mean('sample')[f'mu_{target}']
+
+    ps = PredictionSummary(predictor,target_pred,mu_pred,target_hdi,mu_hdi,mu_mean,predictor_vals,cat_codes)
+
+    return ps
 
 
 def create_model(df,target,predictors):
@@ -255,39 +270,42 @@ def create_model_and_predictions(df,target,predictors,categorical_features,numer
 
     categorical_predictors_vals = {p:cat_factor['cat_feature_codes'][0] for p,cat_factor in cat_factors.items()}
 
-    def unstand(predictor,target_hdi,mu_hdi,mu_mean,predictor_vals):
+    # return model,idata,categorical_predictors,numerical_predictors,feature_means,feature_stds,cat_factors,categorical_predictors_vals
+
+    def unstand(predictor,ps):
         if predictor in feature_means:
-            predictor_vals = unstandardize_vec(predictor_vals,feature_means[predictor],feature_stds[predictor])
+            ps.predictor_vals = unstandardize_vec(ps.predictor_vals,feature_means[predictor],feature_stds[predictor])
         if target in feature_means:
-            target_hdi = unstandardize_vec(target_hdi,feature_means[target],feature_stds[target])
-            mu_hdi = unstandardize_vec(mu_hdi,feature_means[target],feature_stds[target])
-            mu_mean = unstandardize_vec(mu_mean,feature_means[target],feature_stds[target])
-
-        return (target_hdi,mu_hdi,mu_mean,predictor_vals)
-
-    def smooth(target_hdi,mu_hdi,mu_mean,predictor_vals):
-        target_hdi = savgol_filter(target_hdi, axis=0, window_length=COUNTER_FACTUAL_SMOOTH_NUM_POINTS, polyorder=2)
-        mu_hdi = savgol_filter(mu_hdi, axis=0, window_length=COUNTER_FACTUAL_SMOOTH_NUM_POINTS, polyorder=2)
-        mu_mean = savgol_filter(mu_mean, axis=0, window_length=COUNTER_FACTUAL_SMOOTH_NUM_POINTS, polyorder=2)
-        target_hdi = savgol_filter(target_hdi, axis=0, window_length=COUNTER_FACTUAL_SMOOTH_NUM_POINTS, polyorder=2)
-            
-        return (target_hdi,mu_hdi,mu_mean,predictor_vals)
-
-    def smooth_(predictor,target_hdi,mu_hdi,mu_mean,predictor_vals):
-        target_hdi,mu_hdi,mu_mean,predictor_vals = unstand(predictor,target_hdi,mu_hdi,mu_mean,predictor_vals)
-
-        if predictor in numerical_features:
-            (target_hdi,mu_hdi,mu_mean,predictor_vals) = smooth(target_hdi,mu_hdi,mu_mean,predictor_vals)
-
-        return (target_hdi,mu_hdi,mu_mean,predictor_vals)
+            ps.target_hdi = unstandardize_vec(ps.target_hdi,feature_means[target],feature_stds[target])
+            ps.mu_hdi = unstandardize_vec(ps.mu_hdi,feature_means[target],feature_stds[target])
+            ps.mu_mean = unstandardize_vec(ps.mu_mean,feature_means[target],feature_stds[target])
+            ps.target_pred = unstandardize_vec(ps.target_pred,feature_means[target],feature_stds[target])
+            ps.mu_pred = unstandardize_vec(ps.mu_pred,feature_means[target],feature_stds[target])
 
 
-    all_res = {active_predictor:calc_counterfactual_predictor(df,model,idata,target,active_predictor,
-                                                              categorical_predictors,numerical_predictors,
-                                                              cat_num_map,categorical_predictors_vals,cat_factors) \
+    def smooth(ps):
+        ps.target_hdi = savgol_filter(ps.target_hdi, axis=0, window_length=COUNTER_FACTUAL_SMOOTH_NUM_POINTS, polyorder=2)
+        ps.mu_hdi = savgol_filter(ps.mu_hdi, axis=0, window_length=COUNTER_FACTUAL_SMOOTH_NUM_POINTS, polyorder=2)
+        ps.mu_mean = savgol_filter(ps.mu_mean, axis=0, window_length=COUNTER_FACTUAL_SMOOTH_NUM_POINTS, polyorder=2)
+
+
+    def calc_counterfactual(active_predictor):
+        idata_2,predictor_vals = calc_counterfactual_predictor(df,model,idata,target,active_predictor,
+                                        categorical_predictors,numerical_predictors,
+                                        cat_num_map,categorical_predictors_vals,cat_factors)
+        cat_codes = cat_factors[active_predictor]['cat_feature_codes'] if active_predictor in cat_factors else []
+
+        ps = summarize_predictions(idata_2,active_predictor,target,predictor_vals,cat_codes)
+        
+        return ps
+        
+
+    pred_res = {active_predictor:calc_counterfactual(active_predictor) \
                                                     for active_predictor in predictors}
 
-    all_res = {predictor:smooth_(predictor,target_hdi,mu_hdi,mu_mean,predictor_vals) for \
-               predictor,(target_hdi,mu_hdi,mu_mean,predictor_vals) in all_res.items()}
+    for predictor,ps in pred_res.items():
+        unstand(predictor,ps)
+        if predictor in numerical_predictors:
+            smooth(ps)
 
-    return all_res
+    return pred_res
