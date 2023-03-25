@@ -3,42 +3,55 @@ import plotly.express as px
 from pandas import DataFrame
 
 
-def create_plots_with_reg_hdi_lines(df,target,predictors,pred_res):
+def create_plots_with_reg_hdi_lines(df,summary_res):
     figs = {}
 
-    for predictor in predictors:
-        ps = pred_res[predictor]
+    for target,target_res in summary_res.items():
+        figs[target] = {}
 
-        if len(ps.cat_codes)>0:
-            #categorical
-
-            data = []
-            for cat_val,vals,mu_vals in zip(ps.cat_codes,ps.target_pred.values,ps.mu_pred.values):
-                for v,mv in zip(vals,mu_vals):
-                    data.append({predictor:cat_val,target:v,f'{target}_mu':mv})
-
-            df_vals = DataFrame(data)
-
-            figs[predictor] = px.box(df_vals, x=predictor, y=target)
-            figs[f'{predictor}_mu'] = px.box(df_vals, x=predictor, y=f'{target}_mu')
-
-        else:
-
-            target_lower = ps.target_hdi[:,0]
-            target_higher = ps.target_hdi[:,1]
-
-            mu_lower = ps.mu_hdi[:,0]
-            mu_higher = ps.mu_hdi[:,1]
-
-            mu_mean = ps.mu_mean
-
-            predictor_vals = ps.predictor_vals
-
-            other_predictors = list(set(predictors).difference(set([predictor])))
-            other_predictor = other_predictors[0] if len(other_predictors)>0 else None
-            figs[predictor] = create_scatter_with_reg_hdi_lines(df,target,predictor,other_predictor,target_lower,target_higher,mu_lower,mu_higher,mu_mean,predictor_vals)
-
+        for predictor,prediction_summary in target_res.items():
+            fig,fig_mu = create_plot_with_reg_hdi_lines(df,target,predictor,prediction_summary)
+            
+            figs[target][predictor] = {}
+            figs[target][predictor]['fig'] = fig
+            figs[target][predictor]['fig_mu'] = fig_mu
+            figs[target][predictor]['predictors'] = prediction_summary.predictors
+    
     return figs
+
+
+
+def create_plot_with_reg_hdi_lines(df,target,predictor,prediction_summary):
+    fig_mu = None
+
+    if len(prediction_summary.cat_codes)>0:
+        #categorical
+
+        data = []
+        for cat_val,vals,mu_vals in zip(prediction_summary.cat_codes,
+                                        prediction_summary.target_pred.values,prediction_summary.mu_pred.values):
+            for v,mv in zip(vals,mu_vals):
+                data.append({predictor:cat_val,target:v,f'{target}_mu':mv})
+
+        df_vals = DataFrame(data)
+
+        fig = px.box(df_vals, x=predictor, y=target)
+        fig_mu = px.box(df_vals, x=predictor, y=f'{target}_mu')
+
+    else:
+
+        target_lower = prediction_summary.target_hdi[:,0]
+        target_higher = prediction_summary.target_hdi[:,1]
+        mu_lower = prediction_summary.mu_hdi[:,0]
+        mu_higher = prediction_summary.mu_hdi[:,1]
+        mu_mean = prediction_summary.mu_mean
+        predictor_vals = prediction_summary.predictor_vals
+
+        other_predictors = list(set(prediction_summary.predictors).difference(set([predictor])))
+        other_predictor = other_predictors[0] if len(other_predictors)>0 else None
+        fig = create_scatter_with_reg_hdi_lines(df,target,predictor,other_predictor,target_lower,target_higher,mu_lower,mu_higher,mu_mean,predictor_vals)
+
+    return fig,fig_mu
 
 
 # def create_box_plot():

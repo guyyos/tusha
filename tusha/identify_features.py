@@ -2,7 +2,7 @@ from scipy.stats import entropy
 from pandas import Series
 import numpy as np
 import pandas as pd
-from enum import Enum
+from base_def import FeatureType
 
 
 def is_counts(vals):
@@ -120,15 +120,6 @@ def possible_bool(v):
         return False
     except:
         return False
-
-
-class FeatureType(Enum):
-    BOOL = 1
-    CATEGORICAL = 2
-    NUMERICAL = 3
-    ORDINAL = 4
-    COUNT = 5
-
 
 def identify_series(vals):
     # series can be :

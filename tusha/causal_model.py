@@ -17,7 +17,7 @@ import numpy as np
 from dash import Dash, dcc, html, Input, Output, State, ctx, MATCH, ALL
 import json
 from model_creation import create_categorical_univariate_model,create_numerical_univariates_model,create_numerical_univariate_model,create_cat_to_num_model,create_num_to_num_model
-from multivar_model_creation import create_model
+from multivar_model_creation import create_complete_model
 from plot_creation import create_plots_with_reg_hdi_lines
 import arviz as az
 import plotly.figure_factory as ff
@@ -111,17 +111,17 @@ def get_causal_model_layout(df):
 
     return causal_layout
 
-def get_all_parent_causes(causal_graph,feature):
+def get_all_parent_causes(effect_causes,feature):
 
-    def get_all_parent_causes_recurs(causal_graph,feature,causes):
+    def get_all_parent_causes_recurs(effect_causes,feature,causes):
         if feature in causes:
             return
         causes.add(feature)
-        for cause in causal_graph[feature]:
-            get_all_parent_causes_recurs(causal_graph,cause,causes)
+        for cause in effect_causes[feature]:
+            get_all_parent_causes_recurs(effect_causes,cause,causes)
 
     causes = set([])
-    get_all_parent_causes_recurs(causal_graph,feature,causes)
+    get_all_parent_causes_recurs(effect_causes,feature,causes)
 
     return causes
 
@@ -129,14 +129,14 @@ def find_possible_effects(session_id,df_relations,new_cause):
     df = query_data(session_id)
     all_features = df.columns
 
-    causal_graph = df_relations.groupby('Effect')['Cause'].apply(list)
+    effect_causes = df_relations.groupby('Effect')['Cause'].apply(list)
 
     #add features that were not added yet
     for f in all_features:
-        if f not in causal_graph:
-            causal_graph[f] = []
+        if f not in effect_causes:
+            effect_causes[f] = []
 
-    causes = get_all_parent_causes(causal_graph,new_cause)
+    causes = get_all_parent_causes(effect_causes,new_cause)
     posibble_effects = [f for f in all_features if f not in causes]
 
     return posibble_effects
@@ -292,26 +292,34 @@ def build_model(n_clicks, session_id,cause_effect_rels):
     
     return figs
 
+
 @cache.memoize()
 def get_model_plots(session_id,df_relations):
     df = pd.read_json(cache.get(session_id+'_data'))
     df = df.dropna()
     all_figs = []
-    for target,group in df_relations.groupby('Effect'):
-        predictors = list(group['Cause'].unique())
 
-        print(f'get_model_plots predictors = {predictors}')
+    res, summary_res = create_complete_model(df.copy(),df_relations)
+    figs =  create_plots_with_reg_hdi_lines(df,summary_res)
 
-        pred_res = create_model(df.copy(),target,predictors)
-        figs = create_plots_with_reg_hdi_lines(df,target,predictors,pred_res)
-        for predictor,fig in figs.items():
+    for target,target_fig in figs.items():
+
+        for predictor,pred_fig in target_fig.items():
+            fig = pred_fig['fig']
+            predictors = pred_fig['predictors']
+
             preds = ','.join([f'<b>{p}</b>' if p==predictor else p for p in predictors])
             fig_name = f'[{preds}]<b>→{target}</b>'
             fig.update_layout(title=fig_name) 
             all_figs.append(dcc.Graph(id = fig_name,figure=fig))
 
-    return all_figs
+            if pred_fig['fig_mu']:
+                fig = pred_fig['fig_mu']
+                fig_name = f'mu: [{predictor}]<b>→{target}</b>'
+                fig.update_layout(title=fig_name) 
+                all_figs.append(dcc.Graph(id = fig_name,figure=fig))
 
+    return all_figs
 
 
 @cache.memoize()
