@@ -299,8 +299,8 @@ def get_model_plots(session_id,df_relations):
     df = df.dropna()
     all_figs = []
 
-    res, summary_res = create_complete_model(df.copy(),df_relations)
-    figs =  create_plots_with_reg_hdi_lines(df,summary_res)
+    res, summary_res,graph = create_complete_model(df.copy(),df_relations)
+    figs =  create_plots_with_reg_hdi_lines(df,summary_res,graph)
 
     for target,target_fig in figs.items():
 

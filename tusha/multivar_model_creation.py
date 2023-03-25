@@ -97,12 +97,13 @@ def create_complete_model(df, df_relations):
         complete_model,cat_num_map_per_target[n] = create_sub_model(df, graph.nodes[n], predictor_nodes, complete_model)
         
     model, idata = sample_model(complete_model)
-
+    # return df, model, idata, graph, topo_order, cat_num_map_per_target
+    
     res = calc_counterfactual_predictor(df, model, idata, graph, topo_order, cat_num_map_per_target)
     summary_res = summarize_all_predictions(res,graph)
     smooth_all_summary(graph,summary_res)
 
-    return res, summary_res
+    return res, summary_res,graph
 
 
 
@@ -112,7 +113,7 @@ def init_complete_model(df,graph):
         coords = {}
 
         for name,node in graph.nodes.items():
-            if node.info.featureType in set([FeatureType.BOOL, FeatureType.CATEGORICAL]):
+            if node.info.featureType.is_categorical():
                 coords[name] = node.info.cat_feature_codes
                 vals = node.info.cat_feature_idx
             else:
@@ -126,10 +127,8 @@ def init_complete_model(df,graph):
 
 
 def create_cat_num_map(df, node, parent_nodes):
-    categorical_nodes = [n for n in parent_nodes.values(
-    ) if n.info.featureType in set([FeatureType.BOOL, FeatureType.CATEGORICAL])]
-    numerical_nodes = [n for n in parent_nodes.values(
-    ) if n.info.featureType not in set([FeatureType.BOOL, FeatureType.CATEGORICAL])]
+    categorical_nodes = [n for n in parent_nodes.values() if n.info.featureType.is_categorical()] 
+    numerical_nodes = [n for n in parent_nodes.values() if not n.info.featureType.is_categorical()]
 
     numerical_node_vars = set([n.name for n in numerical_nodes])
 
@@ -152,10 +151,8 @@ def create_sub_model(df, target_node, predictor_nodes, complete_model):
 def add_sub_model(df, target_node, predictor_nodes, cat_num_map,model):
     target = target_node.name
 
-    categorical_predictors = [name for name, n in predictor_nodes.items(
-    ) if n.info.featureType in set([FeatureType.BOOL, FeatureType.CATEGORICAL])]
-    numerical_predictors = [name for name, n in predictor_nodes.items(
-    ) if n.info.featureType not in set([FeatureType.BOOL, FeatureType.CATEGORICAL])]
+    categorical_predictors = [name for name, n in predictor_nodes.items() if n.info.featureType.is_categorical()]
+    numerical_predictors = [name for name, n in predictor_nodes.items() if not n.info.featureType.is_categorical()]
 
     cat_pred_no_num = list(set(categorical_predictors).difference(
         set([p for p, nps in cat_num_map.items() if len(nps) > 0])))
@@ -168,7 +165,6 @@ def add_sub_model(df, target_node, predictor_nodes, cat_num_map,model):
     with model:
 
         a = pm.Normal(f'a_{target}', mu=0, sigma=1)
-        sigma = pm.Uniform(f'sigma_{target}', 0, 20)
 
         b_global = {f'bglob_{target}[{p}]': pm.Normal(
             f'bglob_{target}[{p}]', mu=0, sigma=1) for p in categorical_predictors}
@@ -198,13 +194,27 @@ def add_sub_model(df, target_node, predictor_nodes, cat_num_map,model):
         mu = pm.Deterministic(
             f'mu_{target}', a+all_trends_cn+all_trends_c+all_trends_n)
 
-        target_var = pm.Normal(target, mu=mu, sigma=sigma,
-                               observed=model.named_vars[f'data_{target}'], shape=mu.shape)
+        if target_node.info.featureType == FeatureType.BOOL:
+
+            likelihood = pm.invlogit(mu)
+            target_var = pm.Bernoulli(target,likelihood,shape=likelihood.shape,
+                observed=model.named_vars[f'data_{target}'])
+
+        elif target_node.info.featureType == FeatureType.CATEGORICAL:
+
+            p = pm.Deterministic('p',pm.math.softmax(mu,axis=1))
+            target_var = pm.Categorical(target,p=p, observed=model.named_vars[f'data_{target}'])
+
+        else:
+            sigma = pm.Uniform(f'sigma_{target}', 0, 20)
+            target_var = pm.Normal(target, mu=mu, sigma=sigma,
+                        observed=model.named_vars[f'data_{target}'], shape=mu.shape)
 
 
 def create_vals_target_predictor(idata,target):
-    # return az.extract(idata.predictions, num_samples=1)[target][:,0]
-    return az.extract(idata.predictions,num_samples=10).mean('sample')[target].values
+    return az.extract(idata.predictions, num_samples=1)[target][:,0]
+    # need to change below to handle categorical 
+    # return az.extract(idata.predictions,num_samples=10).mean('sample')[target].values  
 
 #need to block only upstream nodes from the predictor. donwstream predictors should be opne - therefore : None
 # block: if numeric=0 else need to set every combination.
@@ -302,7 +312,7 @@ def summarize_all_predictions(res,graph):
             idata = res_predictor['idata']
             predictor_vals = res_predictor['predictor_vals']
             cat_codes = graph.nodes[predictor].info.cat_feature_codes\
-                    if graph.nodes[predictor].info.featureType in set([FeatureType.BOOL, FeatureType.CATEGORICAL]) \
+                    if graph.nodes[predictor].info.featureType.is_categorical() \
                     else []
 
             prediction_summary = summarize_predictions(idata, predictor, target, predictor_vals, cat_codes)
@@ -358,21 +368,24 @@ def smooth_all_summary(graph,summary_res):
 
         for predictor,prediction_summary in res_target.items():
             target_mean = target_std = predictor_mean = predictor_std = None
+            target_info = graph.nodes[target].info
+            predictor_info = graph.nodes[predictor].info
 
-            if graph.nodes[target].info.featureType == FeatureType.NUMERICAL:
-                target_mean = graph.nodes[target].info.mean
-                target_std = graph.nodes[target].info.std
+            print(f'smooth_all_summary {predictor} -> {target} ')
 
-            if graph.nodes[predictor].info.featureType == FeatureType.NUMERICAL:
-                predictor_mean = graph.nodes[predictor].info.mean
-                predictor_std = graph.nodes[predictor].info.std
+            if target_info.featureType == FeatureType.NUMERICAL:
+                target_mean = target_info.mean
+                target_std = target_info.std
+
+            if predictor_info.featureType == FeatureType.NUMERICAL:
+                predictor_mean = predictor_info.mean
+                predictor_std = predictor_info.std
 
             unstand(prediction_summary.predictor, prediction_summary,
                     target_mean,target_std,predictor_mean,predictor_std)
 
-            if graph.nodes[predictor].info.featureType == FeatureType.NUMERICAL:
+            if predictor_info.featureType == FeatureType.NUMERICAL and target_info.featureType == FeatureType.NUMERICAL:
                 smooth(prediction_summary)
-
 
 
 # categorical
