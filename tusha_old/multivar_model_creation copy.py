@@ -109,10 +109,12 @@ def create_complete_model(df, df_relations):
     return model,res,summary_res,graph
 
 
+TUSHA_DIM = 'TUSHA_DIM'
+
 def init_complete_model(df,graph):
 
     with pm.Model() as model:
-        coords = {}
+        coords = {TUSHA_DIM:[1]}
 
         for name,node in graph.nodes.items():
             if node.info.featureType.is_categorical():
@@ -121,6 +123,8 @@ def init_complete_model(df,graph):
             else:
                 vals = df[name].values
 
+            v = pm.MutableData(f'target_{name}', vals)
+            vals = np.array([[v] for v in vals])
             v = pm.MutableData(f'data_{name}', vals)
 
         model.add_coords(coords)
@@ -153,20 +157,10 @@ def create_sub_model(df, target_node, predictor_nodes, complete_model):
 
 def dot_vecs(vec1,vec2):
     # return at.dot(vec1,vec2)
-    print(f'vec1 = {vec1}')
-    print(f'vec2 = {vec2}')
-
-    print(f'vec1.shape.eval() = {vec1.shape.eval()}')
-    print(f'vec2.shape.eval() = {vec2.shape.eval()}')
-
-    # print(f'vec1.eval() = {vec1.eval()}')
-    # print(f'vec2.eval() = {vec2.eval()}')
-
-    if len(vec1.shape.eval())<=0 or len(vec2.shape.eval())<=0:
-        return at.dot(vec1,vec2)
-
-    mtx1 = pt.broadcast_to(vec1, (1,vec1.shape[0])).T
-    mtx2 = pt.broadcast_to(vec2, (1,vec2.shape[0]))
+    print(vec1.shape.eval())
+    print(vec2.shape.eval())
+    mtx1 = pt.broadcast_to(vec1, (1,vec1.shape.eval()[0])).T
+    mtx2 = pt.broadcast_to(vec2, (1,vec2.shape.eval()[0]))
 
     return at.dot(mtx1,mtx2)
 
@@ -207,14 +201,14 @@ def add_sub_model(df, target_node, predictor_nodes, cat_num_map,model):
             sigma=1, dims=(p,dim_target) if dim_target else p) for p in cat_pred_no_num}
 
         bnum = {p: pm.Normal(
-            f'bnum_{target}[{p}]', mu=0, sigma=1, dims=dim_target) for p in num_pred_no_cat}
+            f'bnum_{target}[{p}]', mu=0, sigma=1, dims=(TUSHA_DIM,dim_target) if dim_target else None) for p in num_pred_no_cat}
 
-        all_trends_cn = sum([sum([dot_vecs(bcn[p][nmp][model.named_vars[f'data_{p}']],model.named_vars[f'data_{nmp}']) for nmp in cat_num_map[p]])
+        all_trends_cn = sum([sum([dot_vecs(bcn[p][nmp][model.named_vars[f'target_{p}']],model.named_vars[f'target_{nmp}']) for nmp in cat_num_map[p]])
                           for p in categorical_predictors if p in cat_num_map])
 
-        all_trends_c = sum([bcat[p][model.named_vars[f'data_{p}']] for p in cat_pred_no_num])
+        all_trends_c = sum([bcat[p][model.named_vars[f'target_{p}']] for p in cat_pred_no_num])
 
-        all_trends_n = sum([dot_vecs(model.named_vars[f'data_{p}'],bnum[p]) for p in num_pred_no_cat])
+        all_trends_n = sum([dot_vecs(model.named_vars[f'target_{p}'],bnum[p]) for p in num_pred_no_cat])
 
         print(f'all_trends_cn = {all_trends_cn}')
         print(f'all_trends_c = {all_trends_c}')
@@ -232,15 +226,14 @@ def add_sub_model(df, target_node, predictor_nodes, cat_num_map,model):
             print(f'likelihood.shape = {likelihood.shape.eval()}')
 
             target_var = pm.Bernoulli(target,likelihood,shape=likelihood.shape,
-                observed=model.named_vars[f'data_{target}'])
+                observed=model.named_vars[f'target_{target}'])
 
         elif target_node.info.featureType == FeatureType.CATEGORICAL:
 
             p = pm.Deterministic('p',pm.math.softmax(mu,axis=-1))
             print(f'p.shape = {p.shape.eval()}')
-            print(f'p.shape = {p.shape.eval()}')
             print(f'p.eval = {p.eval()}')
-            target_var = pm.Categorical(target,p=p, shape=p.shape[0], observed=model.named_vars[f'data_{target}'])
+            target_var = pm.Categorical(target,p=p, shape=p.shape[0], observed=model.named_vars[f'target_{target}'])
             
             #extremly slow!!
             # target_var = pm.Categorical(target,p=p, shape=p.shape, observed=model.named_vars[f'data_{target}'])
@@ -250,7 +243,7 @@ def add_sub_model(df, target_node, predictor_nodes, cat_num_map,model):
             print(f'mu.shape = {mu.shape.eval()}')
 
             target_var = pm.Normal(target, mu=mu, sigma=sigma,shape=mu.shape,
-                        observed=model.named_vars[f'data_{target}'])
+                        observed=model.named_vars[f'target_{target}'])
 
 
 def create_vals_target_predictor(idata,target):
@@ -332,7 +325,7 @@ def process_couterfactual_predictor(df, model, idata, graph, target, active_pred
 
     with model:
         for n in df_counterfactual:
-            pm.set_data({f'data_{n}': df_counterfactual[n].values})
+            pm.set_data({f'data_{n}': df_counterfactual[[n]].values})
 
         # use the updated values and predict outcomes and probabilities:
         # thinned_idata = idata.sel(draw=slice(None, None, 5))
