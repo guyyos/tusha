@@ -320,7 +320,7 @@ def process_couterfactual_predictor(df, model, idata, graph, target, active_pred
 
     for n in vars_to_be_blocked:
         node = graph.nodes[n]
-        df_counterfactual[n] = node.info.cat_feature_codes[0] if node.info.featureType.is_categorical() else 0
+        df_counterfactual[n] = 0 #node.info.cat_feature_codes[0] if node.info.featureType.is_categorical() else 0
 
     print('df_counterfactual')
     print(df_counterfactual)
