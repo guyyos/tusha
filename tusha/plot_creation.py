@@ -2,6 +2,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from pandas import DataFrame
 from base_def import FeatureType
+import numpy as np
 
 
 def create_plots_with_reg_hdi_lines(df,summary_res,graph):
@@ -11,9 +12,10 @@ def create_plots_with_reg_hdi_lines(df,summary_res,graph):
         figs[target] = {}
 
         for predictor,prediction_summary in target_res.items():
-            target_type = graph.nodes[target].info.featureType
-            predictor_type = graph.nodes[predictor].info.featureType
-            fig,fig_mu = create_plot_with_reg_hdi_lines(df,target,predictor,prediction_summary,target_type,predictor_type)
+            target_info = graph.nodes[target].info
+            predictor_info = graph.nodes[predictor].info
+            
+            fig,fig_mu = create_plot_with_reg_hdi_lines(df,target,predictor,prediction_summary,target_info,predictor_info)
 
             figs[target][predictor] = {}
             figs[target][predictor]['fig'] = fig
@@ -24,13 +26,39 @@ def create_plots_with_reg_hdi_lines(df,summary_res,graph):
 
 
 
-def create_plot_with_reg_hdi_lines(df,target,predictor,prediction_summary,target_type,predictor_type):
+def create_plot_with_reg_hdi_lines(df,target,predictor,prediction_summary,target_info,predictor_info):
     fig_mu = None
 
-    if predictor_type.is_categorical(): #if len(prediction_summary.cat_codes)>0:
+    target_type = target_info.featureType
+    predictor_type = predictor_info.featureType
+
+    if target_type.is_categorical():
+        target_vals = prediction_summary.target_pred.to_numpy()
+        num_samples = target_vals.shape[1]
+        data = []
+        for cat_idx,cat_val in enumerate(target_info.cat_feature_codes):
+
+            target_val_counts = np.count_nonzero(target_vals == cat_idx,axis=1)
+
+            predictor_vals = prediction_summary.cat_codes if predictor_type.is_categorical() \
+                                                        else prediction_summary.predictor_vals
+                
+            for pv,tv in zip(predictor_vals,target_val_counts):
+                # weight = int(tv//10)
+                # data.extend([{predictor:pv,target:cat_val}]*weight)
+                precent = 100*tv/num_samples
+                data.append({predictor:pv,'%':precent,target:cat_val})
+
+        df_vals = DataFrame(data)
+
+        # fig = px.box(df_vals, x=predictor, y=target)
+        fig = px.bar(df_vals, x=predictor, y="%", color=target)
+
+    elif predictor_type.is_categorical(): #if len(prediction_summary.cat_codes)>0:
         data = []
         for cat_val,vals,mu_vals in zip(prediction_summary.cat_codes,
                                         prediction_summary.target_pred.values,prediction_summary.mu_pred.values):
+
             for v,mv in zip(vals,mu_vals):
                 data.append({predictor:cat_val,target:v,f'{target}_mu':mv})
 

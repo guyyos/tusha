@@ -236,7 +236,7 @@ def add_sub_model(df, target_node, predictor_nodes, cat_num_map,model):
 
         elif target_node.info.featureType == FeatureType.CATEGORICAL:
 
-            p = pm.Deterministic('p',pm.math.softmax(mu,axis=-1))
+            p = pm.Deterministic(f'p_{target}',pm.math.softmax(mu,axis=-1))
             print(f'p.shape = {p.shape.eval()}')
             print(f'p.shape = {p.shape.eval()}')
             print(f'p.eval = {p.eval()}')
