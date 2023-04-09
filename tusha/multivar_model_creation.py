@@ -13,6 +13,7 @@ from base_def import FeatureInfo, DAGraph, FeatureType
 from pymc.sampling import jax
 import pytensor.tensor as pt
 import xarray as xr
+import random
 
 
 
@@ -321,7 +322,8 @@ def process_couterfactual_predictor(df, model, idata, graph, target, active_pred
     def inner_process_couterfactual_predictor(isample):
         for n in vars_to_be_blocked:
             node = graph.nodes[n]
-            df_counterfactual[n] = 0 #node.info.cat_feature_codes[0] if node.info.featureType.is_categorical() else 0
+            df_counterfactual[n] = random.choices(node.info.cat_feature_idx, k=len(df_counterfactual)) \
+                                    if node.info.featureType.is_categorical() else 0
 
         for n in vars_to_be_open:
             df_counterfactual[n] = vals_target_predictors[n][active_predictor][:,isample]
