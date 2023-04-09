@@ -12,6 +12,8 @@ from base_def import COUNTER_FACTUAL_NUM_POINTS, COUNTER_FACTUAL_SMOOTH_NUM_POIN
 from base_def import FeatureInfo, DAGraph, FeatureType
 from pymc.sampling import jax
 import pytensor.tensor as pt
+import xarray as xr
+
 
 
 def standardize_vec(unstd_vec, mean, std):
@@ -252,9 +254,12 @@ def add_sub_model(df, target_node, predictor_nodes, cat_num_map,model):
             target_var = pm.Normal(target, mu=mu, sigma=sigma,shape=mu.shape,
                         observed=model.named_vars[f'data_{target}'])
 
+NUM_SAMPLES_PER_PREDICTION = 10
 
 def create_vals_target_predictor(idata,target):
-    return az.extract(idata.predictions, num_samples=1)[target][:,0]
+    return az.extract(idata.predictions, num_samples=NUM_SAMPLES_PER_PREDICTION)[target].values
+    # return az.extract(idata.predictions, num_samples=NUM_SAMPLES_PER_PREDICTION)[target][:,0]
+
     # need to change below to handle categorical 
     # return az.extract(idata.predictions,num_samples=10).mean('sample')[target].values  
 
@@ -286,8 +291,6 @@ def calc_counterfactual_predictor(df, model, idata, graph, topo_order, cat_num_m
             res[target][active_predictor] = {}
             res[target][active_predictor]['idata'] = idata_2
             res[target][active_predictor]['predictor_vals'] = predictor_vals
-
-            vals_target_predictors[target][active_predictor] = create_vals_target_predictor(idata_2,target)
     
     return res
             
@@ -315,36 +318,52 @@ def process_couterfactual_predictor(df, model, idata, graph, target, active_pred
         df_counterfactual = DataFrame({active_predictor: np.linspace(
             df[active_predictor].min(), df[active_predictor].max(), COUNTER_FACTUAL_NUM_POINTS)})
 
-    for n in vars_to_be_open:
-        df_counterfactual[n] = vals_target_predictors[n][active_predictor]
+    def inner_process_couterfactual_predictor(isample):
+        for n in vars_to_be_blocked:
+            node = graph.nodes[n]
+            df_counterfactual[n] = 0 #node.info.cat_feature_codes[0] if node.info.featureType.is_categorical() else 0
 
-    for n in vars_to_be_blocked:
-        node = graph.nodes[n]
-        df_counterfactual[n] = 0 #node.info.cat_feature_codes[0] if node.info.featureType.is_categorical() else 0
+        for n in vars_to_be_open:
+            df_counterfactual[n] = vals_target_predictors[n][active_predictor][:,isample]
 
-    print('df_counterfactual')
-    print(df_counterfactual)
+        print('df_counterfactual')
+        print(df_counterfactual)
 
-    # var_names = list(set([target]).union(vars_to_be_open))
-    # var_names = var_names+[f'mu_{v}' for v in var_names]
-    var_names = [target,f'mu_{target}']
-    print(f'process_couterfactual_predictor: var_names = {var_names}')
+        # var_names = list(set([target]).union(vars_to_be_open))
+        # var_names = var_names+[f'mu_{v}' for v in var_names]
+        var_names = [target,f'mu_{target}']
+        print(f'process_couterfactual_predictor: var_names = {var_names}')
 
-    with model:
-        for n in df_counterfactual:
-            pm.set_data({f'data_{n}': df_counterfactual[n].values})
+        with model:
+            for n in df_counterfactual:
+                pm.set_data({f'data_{n}': df_counterfactual[n].values})
 
-        # use the updated values and predict outcomes and probabilities:
-        # thinned_idata = idata.sel(draw=slice(None, None, 5))
+            # use the updated values and predict outcomes and probabilities:
+            thinned_idata = idata.sel(draw=slice(isample, None, 10))
 
-        idata_2 = pm.sample_posterior_predictive(
-            idata,
-            var_names=var_names,
-            return_inferencedata=True,
-            predictions=True,
-        )
+            idata_2 = pm.sample_posterior_predictive(
+                thinned_idata,
+                var_names=var_names,
+                return_inferencedata=True,
+                predictions=True,
+            )
+        return idata_2
 
-    return idata_2, df_counterfactual[active_predictor]
+    if len(vars_to_be_open)>0:
+        idata_new = None
+        for isample in range(NUM_SAMPLES_PER_PREDICTION):
+            idata_new1 = inner_process_couterfactual_predictor(isample)
+            if idata_new:
+                idata_new.predictions = xr.concat([idata_new.predictions,idata_new1.predictions],dim = 'draw')
+            else:
+                idata_new = idata_new1
+
+    else:
+        idata_new = inner_process_couterfactual_predictor(None)
+    
+    vals_target_predictors[target][active_predictor] = az.extract(idata_new.predictions, num_samples=NUM_SAMPLES_PER_PREDICTION)[target].values
+
+    return idata_new, df_counterfactual[active_predictor]
 
 
 def summarize_all_predictions(res,graph):
@@ -381,6 +400,26 @@ def summarize_predictions(idata, predictor, target, predictor_vals, cat_codes):
 
     return ps
 
+def create_smooth_cat_target_data(prediction_summary,target,predictor,target_info,predictor_info):
+    target_vals = prediction_summary.target_pred.to_numpy()
+    num_samples = target_vals.shape[1]
+    data = []
+    for cat_idx,cat_val in enumerate(target_info.cat_feature_codes):
+
+        target_val_counts = np.count_nonzero(target_vals == cat_idx,axis=1)
+        if predictor_info.featureType.is_numerical():
+            target_val_counts = savgol_filter(target_val_counts, axis=0, window_length=len(target_val_counts), polyorder=2)
+
+        predictor_vals = prediction_summary.cat_codes if predictor_info.featureType.is_categorical() \
+                                                    else prediction_summary.predictor_vals
+            
+        for pv,tv in zip(predictor_vals,target_val_counts):
+            percent = 100*tv/num_samples                
+            data.append({predictor:pv,'%':percent,target:cat_val})
+
+    df_cat_target_data = DataFrame(data)
+
+    return df_cat_target_data
 
 def smooth_all_summary(graph,summary_res):
 
@@ -408,6 +447,7 @@ def smooth_all_summary(graph,summary_res):
         ps.mu_mean = savgol_filter(
             ps.mu_mean, axis=0, window_length=COUNTER_FACTUAL_SMOOTH_NUM_POINTS, polyorder=2)
 
+
     for target,res_target in summary_res.items():
 
         for predictor,prediction_summary in res_target.items():
@@ -430,6 +470,13 @@ def smooth_all_summary(graph,summary_res):
 
             if predictor_info.featureType == FeatureType.NUMERICAL and target_info.featureType == FeatureType.NUMERICAL:
                 smooth(prediction_summary)
+
+            if target_info.featureType == FeatureType.CATEGORICAL:
+                df_cat_target_data = create_smooth_cat_target_data(prediction_summary,target,predictor,target_info,predictor_info)
+                prediction_summary.df_cat_target_data = df_cat_target_data
+
+
+
 
 
 # categorical

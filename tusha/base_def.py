@@ -26,6 +26,8 @@ class FeatureType(Enum):
 
     def is_categorical(self):
         return self == FeatureType.BOOL or self == FeatureType.CATEGORICAL
+    def is_numerical(self):
+        return self == FeatureType.NUMERICAL or self == FeatureType.COUNT
 
 
 class FeatureInfo:

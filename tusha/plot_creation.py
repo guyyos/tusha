@@ -33,26 +33,10 @@ def create_plot_with_reg_hdi_lines(df,target,predictor,prediction_summary,target
     predictor_type = predictor_info.featureType
 
     if target_type.is_categorical():
-        target_vals = prediction_summary.target_pred.to_numpy()
-        num_samples = target_vals.shape[1]
-        data = []
-        for cat_idx,cat_val in enumerate(target_info.cat_feature_codes):
-
-            target_val_counts = np.count_nonzero(target_vals == cat_idx,axis=1)
-
-            predictor_vals = prediction_summary.cat_codes if predictor_type.is_categorical() \
-                                                        else prediction_summary.predictor_vals
-                
-            for pv,tv in zip(predictor_vals,target_val_counts):
-                # weight = int(tv//10)
-                # data.extend([{predictor:pv,target:cat_val}]*weight)
-                precent = 100*tv/num_samples
-                data.append({predictor:pv,'%':precent,target:cat_val})
-
-        df_vals = DataFrame(data)
+        prediction_summary.df_cat_target_data
 
         # fig = px.box(df_vals, x=predictor, y=target)
-        fig = px.bar(df_vals, x=predictor, y="%", color=target)
+        fig = px.bar(prediction_summary.df_cat_target_data, x=predictor, y="%", color=target)
 
     elif predictor_type.is_categorical(): #if len(prediction_summary.cat_codes)>0:
         data = []
