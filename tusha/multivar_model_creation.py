@@ -409,15 +409,16 @@ def create_smooth_cat_target_data(prediction_summary,target,predictor,target_inf
         target_val_counts = np.count_nonzero(target_vals == cat_idx,axis=1)
         if predictor_info.featureType.is_numerical():
             target_val_counts = savgol_filter(target_val_counts, axis=0, window_length=len(target_val_counts), polyorder=2)
+            target_val_counts = [c if c>0 else 0 for c in target_val_counts]
 
         predictor_vals = prediction_summary.cat_codes if predictor_info.featureType.is_categorical() \
                                                     else prediction_summary.predictor_vals
             
         for pv,tv in zip(predictor_vals,target_val_counts):
-            percent = 100*tv/num_samples                
-            data.append({predictor:pv,'%':percent,target:cat_val})
+            data.append({predictor:pv,'count':tv,target:cat_val})
 
     df_cat_target_data = DataFrame(data)
+    df_cat_target_data['%'] = df_cat_target_data['count'] / df_cat_target_data.groupby(predictor)['count'].transform('sum')
 
     return df_cat_target_data
 
