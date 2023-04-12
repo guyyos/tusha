@@ -9,6 +9,8 @@ model_engine = "text-davinci-003"
 cause = 'smoking'
 effect = 'cancer'
 prompt = f"can {cause} increase {effect}.answer yes or no"
+prompt = f"can {cause} increase {effect}. why?"
+# prompt = 'why?'
 
 # Generate a response
 completion = openai.Completion.create(
