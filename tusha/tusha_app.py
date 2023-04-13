@@ -15,6 +15,7 @@ from eda import eda_layout, gen_eda_children
 from causal_model import causal_model_layout, get_causal_model_layout
 from app import app, cache
 import dash_mantine_components as dmc
+from identify_features import find_datetime_col
 
 
 # the style arguments for the sidebar. We use position:fixed and a fixed width
@@ -277,6 +278,18 @@ def serve_layout():
 app.layout = serve_layout
 
 
+def preprocess_df(df):
+    
+    from pandas.errors import ParserError
+    for c in df.columns[df.dtypes=='object']: #don't cnvt num
+        try:
+            df[c]=pd.to_datetime(df[c])
+        except (ParserError,ValueError): #Can't cnvrt some
+            pass # ...so leave whole column as-is unconverted
+    return df
+
+
+
 def parse_file_contents(contents, filename):
     content_type, content_string = contents.split(',')
 
@@ -290,6 +303,8 @@ def parse_file_contents(contents, filename):
             # Assume that the user uploaded an excel file
             df = pd.read_excel(io.BytesIO(decoded))
 
+        preprocess_df(df)
+        
         return df
     except Exception as e:
         print(e)
@@ -312,11 +327,14 @@ def update_output(contents, filename, last_modified, session_id):
         last_modified = datetime.datetime.fromtimestamp(last_modified)
 
         df = parse_file_contents(contents, filename)
+        time_col = find_datetime_col(df)
+
 
         cache.set(session_id+'_data', df.to_json())
         cache.set(session_id+'_name', filename)
+        cache.set(session_id+'_time_col', time_col)
 
-        eda_children = gen_eda_children(df, filename)
+        eda_children = gen_eda_children(df, filename,time_col)
         return eda_children,f'**{filename}**',1
     return None, NO_FILE_LOADED_MSG,0
 
@@ -329,6 +347,7 @@ def update_causl_model(eda_updated, session_id):
     if eda_updated:
 
         df = pd.read_json(cache.get(session_id+'_data'))
+        preprocess_df(df)
 
         eda_children = get_causal_model_layout(df)
         return eda_children

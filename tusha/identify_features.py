@@ -8,6 +8,14 @@ from base_def import FeatureType
 def is_counts(vals):
     return min(vals) >= 0 and vals.apply(lambda x: x.is_integer()).all()
 
+
+def find_datetime_col(df):
+    for col in df.columns:  
+        if pd.core.dtypes.common.is_datetime_or_timedelta_dtype(df[col]):
+            return col
+    return None
+
+
 def safe_log(vals):
     if min(vals)<0:
         raise ValueError
