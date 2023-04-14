@@ -25,9 +25,9 @@ def gen_eda_children(df, name, time_col):
             dbc.Container(id='eda_plots', children=[]),
             html.P("", id="mid_eda"),
             dbc.Row([dbc.Col(dbc.Button(' Add plot', id="eda-add-plot",
-                    n_clicks=0, className='bi bi-graph-up-arrow rounded-pill',outline=True, color="primary"), width=2),
+                    n_clicks=0, className='bi bi-graph-up-arrow rounded-pill', outline=True, color="primary"), width=2),
                     dbc.Col(dbc.Button(' Add time plot', id="eda-add-time-plot",
-                    n_clicks=0, className='bi bi-graph-up-arrow rounded-pill',outline=True, color="primary",disabled=not time_col), width=2)]),
+                                       n_clicks=0, className='bi bi-graph-up-arrow rounded-pill', outline=True, color="primary", disabled=not time_col), width=2)]),
 
             dcc.Store(id='time_col', data=time_col),
 
@@ -60,7 +60,7 @@ def gen_eda_children(df, name, time_col):
                     'overflowY': 'scroll'
                 }
 
-            ), 
+            ),
 
         ]
     )
@@ -74,7 +74,7 @@ def gen_eda_children(df, name, time_col):
           State('datatable-interactivity', "derived_virtual_data"),
           State('time_col', "data")
           )
-def modify_eda_plots(n_clicks, n_clicks1, remove_click, children, data,time_col):
+def modify_eda_plots(n_clicks, n_clicks1, remove_click, children, data, time_col):
     print(f'modify_eda_plots {dash.callback_context.triggered}')
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
     print(f'modify_eda_plots btn {btn}')
@@ -87,7 +87,7 @@ def modify_eda_plots(n_clicks, n_clicks1, remove_click, children, data,time_col)
         btn_id = json.loads(btn)
         remove_id = None
         if btn_id['type'] == 'remove-plot':
-            for i,child in enumerate(children):
+            for i, child in enumerate(children):
                 child_id = child['props']['id']
                 if child_id == btn_id["index"]:
                     remove_id = i
@@ -113,24 +113,27 @@ def create_new_time_plot(children, data, time_col):
 
     idx = str(uuid.uuid4())
 
-    
+    symbol_col = [dbc.Label("symbol:" if categorical_columns else ''), dbc.Row(dcc.RadioItems(
+        id={'type': 'symbol-data-time', 'index': idx}, options=categorical_columns, value=None,
+        labelStyle={"display": "flex", "align-items": "center"}))]
+
     new_element = dbc.Container([
         dbc.Row(
             [
-                dbc.Col([dbc.Label("y:"),dcc.Checklist(id={'type': 'yaxis-data-time', 'index': idx},options=numeric_columns,value=[])], width=2),
+                dbc.Col([dbc.Label("metrics:"), dcc.Checklist(id={'type': 'yaxis-data-time', 'index': idx},
+                                                              options=numeric_columns, value=[],
+                                                              labelStyle={"display": "flex", "align-items": "center"})], width=2),
                 dbc.Col(
                     html.Div(id={'type': 'output-div-time', 'index': idx})),
-                dbc.Col([dbc.Label("symbol:"),
-                         dbc.Row(dcc.Checklist(id={'type': 'symbol-data-time', 'index': idx},options=categorical_columns,value=[]))
-                         ], width=2),
+                dbc.Col(symbol_col, width=2),
             ], align="center"),
         dbc.Row([dbc.Col(dbc.Button(id={'type': 'remove-plot', 'index': idx},
-                                    n_clicks=0, className='bi bi-trash3 rounded-circle', outline=True, color="primary"),width=1)],align='right'),
+                                    n_clicks=0, className='bi bi-trash3 rounded-circle', outline=True, color="primary"), width=1)], align='right'),
         html.Hr(),  # horizontal line
         dcc.Store(id={'type': 'plot_info', 'index': idx}, data='plot')
-    ],id={'type': 'graph_container', 'index': idx})
+    ], id={'type': 'graph_container', 'index': idx})
 
-    new_element = dbc.Container(new_element,id = idx)
+    new_element = dbc.Container(new_element, id=idx)
 
     if children is None:
         children = []
@@ -138,7 +141,6 @@ def create_new_time_plot(children, data, time_col):
     children.append(new_element)
 
     return children
-
 
 
 def create_new_plot(children, data):
@@ -147,34 +149,33 @@ def create_new_plot(children, data):
     numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
     numeric_columns = df.select_dtypes(include=numerics).columns
 
-
     idx = str(uuid.uuid4())
 
     new_element = dbc.Container([
         dbc.Row(
             [
-                dbc.Col([dbc.Label("y:"),dcc.Dropdown(id={'type': 'yaxis-data', 'index': idx}, value=None,
-                                      options=[{'label': x, 'value': x} for x in df.columns])], width=2),
+                dbc.Col([dbc.Label("y:"), dcc.Dropdown(id={'type': 'yaxis-data', 'index': idx}, value=None,
+                                                       options=[{'label': x, 'value': x} for x in df.columns])], width=2),
                 dbc.Col(
                     html.Div(id={'type': 'output-div', 'index': idx})),
                 dbc.Col([dbc.Label("size:"),
-                         dbc.Row(dcc.Dropdown(id={'type': 'size-data', 'index': idx}, value=None,disabled=True,
+                         dbc.Row(dcc.Dropdown(id={'type': 'size-data', 'index': idx}, value=None, disabled=True,
                                               options=[{'label': x, 'value': x} for x in numeric_columns])),
                          dbc.Label("color:"),
                          dbc.Row(dcc.Dropdown(id={'type': 'color-data', 'index': idx}, value=None,
                                               options=[{'label': x, 'value': x} for x in df.columns]))
                          ], width=2),
             ], align="center"),
-        dbc.Row([dbc.Col([dbc.Label("x:"),dcc.Dropdown(id={'type': 'xaxis-data', 'index': idx}, value=None,
-                                      options=[{'label': x, 'value': x} for x in df.columns])], width=2)
-                ], justify="center"),
+        dbc.Row([dbc.Col([dbc.Label("x:"), dcc.Dropdown(id={'type': 'xaxis-data', 'index': idx}, value=None,
+                                                        options=[{'label': x, 'value': x} for x in df.columns])], width=2)
+                 ], justify="center"),
         dbc.Row([dbc.Col(dbc.Button(id={'type': 'remove-plot', 'index': idx},
-                                    n_clicks=0, className='bi bi-trash3 rounded-circle', outline=True, color="primary"),width=1)],align='right'),
+                                    n_clicks=0, className='bi bi-trash3 rounded-circle', outline=True, color="primary"), width=1)], align='right'),
         html.Hr(),  # horizontal line
         dcc.Store(id={'type': 'plot_info', 'index': idx}, data='plot')
-    ],id = {'type': 'graph_container', 'index': idx})
+    ], id={'type': 'graph_container', 'index': idx})
 
-    new_element = dbc.Container(new_element,id = idx)
+    new_element = dbc.Container(new_element, id=idx)
 
     if children is None:
         children = []
@@ -184,18 +185,18 @@ def create_new_plot(children, data):
     return children
 
 
-def find_element_in_props_tree(props_tree,id_type):
+def find_element_in_props_tree(props_tree, id_type):
     if type(props_tree) is dict and 'id' in props_tree and \
-        type(props_tree['id']) is dict and 'type' in props_tree['id'] and props_tree['id']['type']==id_type:
+            type(props_tree['id']) is dict and 'type' in props_tree['id'] and props_tree['id']['type'] == id_type:
         return props_tree
     if type(props_tree) is dict:
         for el in props_tree.values():
-            res = find_element_in_props_tree(el,id_type)
+            res = find_element_in_props_tree(el, id_type)
             if res:
                 return res
     if type(props_tree) is list:
         for el in props_tree:
-            res = find_element_in_props_tree(el,id_type)
+            res = find_element_in_props_tree(el, id_type)
             if res:
                 return res
     return None
@@ -204,26 +205,28 @@ def find_element_in_props_tree(props_tree,id_type):
 @callback(Output({'type': 'plot_info', 'index': ALL}, 'data'),
           Input({'type': 'plot_info', 'index': ALL}, 'data'),
           Input({'type': 'graph_container', 'index': ALL}, 'children'),
-          Input({'type': 'output-div', 'index': ALL},'children'),
-          Input({'type': 'output-div-time', 'index': ALL},'children')
+          Input({'type': 'output-div', 'index': ALL}, 'children'),
+          Input({'type': 'output-div-time', 'index': ALL}, 'children')
           )
-def modify_plot_info(plot_infos,graph_containers,graphs,time_graphs):
-    print(f'modify_plot_info graph_containers = {graph_containers}')
-    print(f'modify_plot_info plot_infos = {plot_infos}')
+def modify_plot_info(plot_infos, graph_containers, graphs, time_graphs):
+    # print(f'modify_plot_info graph_containers = {graph_containers}')
+    # print(f'modify_plot_info plot_infos = {plot_infos}')
 
     plot_infos = []
-    for i,graph_container in enumerate(graph_containers):
-        xelement = find_element_in_props_tree(graph_container,'xaxis-data')
+    for i, graph_container in enumerate(graph_containers):
+        xelement = find_element_in_props_tree(graph_container, 'xaxis-data')
 
         if xelement and 'value' in xelement and xelement['value']:
             plot_info = f'plot : {xelement["value"]}'
-            yelement = find_element_in_props_tree(graph_container,'yaxis-data')
+            yelement = find_element_in_props_tree(
+                graph_container, 'yaxis-data')
             if yelement and 'value' in yelement and yelement['value']:
                 plot_info = f'{plot_info} vs {yelement["value"]}'
             plot_infos.append(plot_info)
             continue
 
-        yelement = find_element_in_props_tree(graph_container,'yaxis-data-time')
+        yelement = find_element_in_props_tree(
+            graph_container, 'yaxis-data-time')
         if yelement and 'value' in yelement and yelement['value']:
             plot_info = f"time plot : {','.join(yelement['value'])}"
             plot_infos.append(plot_info)
@@ -233,11 +236,12 @@ def modify_plot_info(plot_infos,graph_containers,graphs,time_graphs):
 
     return plot_infos
 
+
 @callback(Output({'type': 'eda-plot-link', 'index': ALL}, 'children'),
           Input({'type': 'plot_info', 'index': ALL}, 'data'),
           State({'type': 'eda-plot-link', 'index': ALL}, 'children')
           )
-def modify_quick_link(plot_infos,plot_links):
+def modify_quick_link(plot_infos, plot_links):
 
     new_plot_links = plot_infos
 
@@ -266,39 +270,40 @@ def make_graphs(data, x_data, y_data, size_data, color_data):
     print(f'make_graphs color_data = {color_data}')
 
     if x_data is None:
-        return None,True,True,True
-    
+        return None, True, True, True
+
     df = pd.DataFrame(data)
 
     if df[x_data].dtype.name == 'object':
         if y_data and df[y_data].dtype.name == 'object':
             graph = px.bar(df, x=x_data, color=y_data)
-            return dcc.Graph(figure=graph),False,True,True
+            return dcc.Graph(figure=graph), False, True, True
 
-        elif y_data:#numeric
-            graph = px.box(df, x=x_data, y=y_data, color=color_data,notched=True)
-            return dcc.Graph(figure=graph),False,True,False
+        elif y_data:  # numeric
+            graph = px.box(df, x=x_data, y=y_data,
+                           color=color_data, notched=True)
+            return dcc.Graph(figure=graph), False, True, False
         else:
             graph = px.bar(df, x=x_data)
-            return dcc.Graph(figure=graph),False,True,False
+            return dcc.Graph(figure=graph), False, True, False
 
-    #x numerical
-    if y_data: 
+    # x numerical
+    if y_data:
         size_col = None
         if size_data:
 
             mean, std = df[size_data].mean(), df[size_data].std()
             size_col = df[size_data].apply(lambda x: 5+3*(x-mean)/std)
             size_col = size_col.apply(lambda x: min(max(x, 1), 20))
-        
+
         print(f'make_graphs before px.scatter')
 
         graph = px.scatter(data,  x=x_data, y=y_data, color=color_data, size=size_col,
-                    trendline="ols", marginal_x="histogram", marginal_y="histogram")
+                           trendline="ols", marginal_x="histogram", marginal_y="histogram")
     else:
         graph = px.histogram(data, x=x_data)
 
-    return dcc.Graph(figure=graph),False,False,False
+    return dcc.Graph(figure=graph), False, False, False
 
 
 @callback(Output({'type': 'output-div-time', 'index': MATCH}, 'children'),
@@ -307,17 +312,17 @@ def make_graphs(data, x_data, y_data, size_data, color_data):
           Input({'type': 'symbol-data-time', 'index': MATCH}, 'value'),
           State('time_col', "data")
           )
-def make_time_graphs(data, y_data, symbol_data,time_col):
-
-    symbol_data = symbol_data if symbol_data else None
+def make_time_graphs(data, y_data, symbol_data, time_col):
 
     print(f'make_time_graphs y_data = {y_data}')
-    print(f'make_time_graphs color_data = {symbol_data}')
+    print(f'make_time_graphs symbol_data = {symbol_data}')
 
     if not y_data:
         return []
 
     df = pd.DataFrame(data)
-    graph = px.line(df, x=time_col, y=y_data, symbol=symbol_data)
-    return dcc.Graph(figure=graph)
+    symbols = [sym for symbol in ['circle','square','hexagram','star', 'diamond', 'hourglass', 'bowtie'] for sym in [symbol,f'{symbol}-open']]
 
+    fig = px.line(df, x=time_col, y=y_data, symbol=symbol_data,symbol_sequence = symbols)
+
+    return dcc.Graph(figure=fig)
