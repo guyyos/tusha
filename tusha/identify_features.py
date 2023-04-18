@@ -16,6 +16,44 @@ def find_datetime_col(df):
     return None
 
 
+def is_time_series_level(df,col1,time_col):
+    for cat,grp in df.groupby(col1):
+        if len(grp)>0 and len(grp)!=grp[time_col].nunique():
+            return False
+    return True
+
+
+def is_upper_level(df,upper_level,lower_level):
+    for cat,grp in df.groupby(lower_level):
+        if grp[upper_level].nunique()>1:
+            return False
+    return True
+
+
+def find_hierarchical_struct(df,time_col):
+    cat_cols = df.select_dtypes(include=['category','object']).columns
+
+    ts_level_cols = [col for col in cat_cols if is_time_series_level(df,col,time_col)]
+
+    ts_level_cols = sorted([(col,df[col].nunique()) for col in ts_level_cols],key=lambda x:x[1])
+
+    if len(ts_level_cols)<=0:
+        return []
+    
+    ts_level_col,ts_level_col_nuniq = ts_level_cols[0]
+
+    cat_counts = sorted([(col,df[col].nunique()) for col in cat_cols if df[col].nunique()<ts_level_col_nuniq],key=lambda x:-x[1])
+
+    lower_level = ts_level_col
+    hierarchy = [lower_level]
+    for cat_col,cat_count in cat_counts:
+        if is_upper_level(df,cat_col,lower_level):
+            hierarchy.append(cat_col)
+            lower_level = cat_col
+
+    return list(reversed(hierarchy))
+
+
 def safe_log(vals):
     if min(vals)<0:
         raise ValueError

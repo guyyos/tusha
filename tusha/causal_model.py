@@ -22,6 +22,7 @@ from plot_creation import create_plots_with_reg_hdi_lines
 import arviz as az
 import plotly.figure_factory as ff
 import dash_cytoscape as cyto
+from multivar_model_creation_time import create_complete_time_model
 
 causal_model_layout = html.Div(id='causal_model_layout')
 
@@ -262,7 +263,8 @@ def query_data(session_id):
 @dash.callback(Output('model-res', 'children'),
                Input('build-model-button', 'n_clicks'),
                [State('session-id', 'data'),
-                State('cause-effect-relations', 'data')],
+                State('cause-effect-relations', 'data'),
+                State('time_col', "data")],
                background=True,
                running=[
     (Output("build-model-button", "disabled"), True, False),
@@ -271,7 +273,7 @@ def query_data(session_id):
     ],
     cancel=[Input("cancel-build", "n_clicks")]
 )
-def build_model(n_clicks, session_id,cause_effect_rels):
+def build_model(n_clicks, session_id,cause_effect_rels,time_col):
     if n_clicks is None or n_clicks<=0:
         return None
 
@@ -286,7 +288,7 @@ def build_model(n_clicks, session_id,cause_effect_rels):
     #     fig.update_layout(title=fig_name) 
     #     figs.append(dcc.Graph(id = fig_name,figure=fig))
 
-    figs2 = get_model_plots(session_id,df_relations)
+    figs2 = get_model_plots(session_id,df_relations,time_col)
 
     figs+=figs2
     
@@ -294,12 +296,17 @@ def build_model(n_clicks, session_id,cause_effect_rels):
 
 
 @cache.memoize()
-def get_model_plots(session_id,df_relations):
+def get_model_plots(session_id,df_relations,time_col):
     df = pd.read_json(cache.get(session_id+'_data'))
     df = df.dropna()
     all_figs = []
 
-    model,res,summary_res,graph = create_complete_model(df.copy(),df_relations)
+    if time_col:
+        df_temporal,model,res,summary_res,graph = create_complete_time_model(df.copy(),df_relations,time_col)
+        df = df_temporal
+    else:
+        model,res,summary_res,graph = create_complete_model(df.copy(),df_relations)
+
     figs =  create_plots_with_reg_hdi_lines(df,summary_res,graph)
 
     for target,target_fig in figs.items():
