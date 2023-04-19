@@ -80,7 +80,7 @@ def add_cause_effect(add_ce_clicks, remove_ce_clicks,relations, session_id):
 
         return relations#dbc.Container(relations)
 
-    df = query_data(session_id)
+    df = load_data(session_id)
 
     new_element = dbc.Container([
         dbc.Row([

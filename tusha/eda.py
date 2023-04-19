@@ -12,9 +12,27 @@ from matplotlib import pyplot as plt
 from dash import Dash, dcc, html, Input, Output, State, MATCH, ALL
 import json
 import uuid
+from load_data_tab import load_data
 
 
 eda_layout = html.Div(id='eda_layout')
+
+
+@callback(Output('eda_layout', 'children'),
+          Input('prev_file_selector', 'options'),
+          Input('prev_file_selector', 'value'),
+          State('session-id', 'data'))
+def update_layout(prev_files, filename, session_id):
+    print(f'update_layout prev_files = {prev_files}')
+    print(f'update_layout filename = {filename}')
+    if filename:
+
+        df,time_col = load_data(session_id)
+
+        data_children = gen_eda_children(df, filename, time_col)
+
+        return data_children
+    return None
 
 
 def gen_eda_children(df, name, time_col):
@@ -27,41 +45,7 @@ def gen_eda_children(df, name, time_col):
             dbc.Row([dbc.Col(dbc.Button(' Add plot', id="eda-add-plot",
                     n_clicks=0, className='bi bi-graph-up-arrow rounded-pill', outline=True, color="primary"), width=2),
                     dbc.Col(dbc.Button(' Add time plot', id="eda-add-time-plot",
-                                       n_clicks=0, className='bi bi-graph-up-arrow rounded-pill', outline=True, color="primary", disabled=not time_col), width=2)]),
-
-            dcc.Store(id='time_col', data=time_col),
-
-            # dash_table.DataTable(
-            #     data=df.to_dict('records'),
-            #     columns=[{'name': i, 'id': i} for i in df.columns],
-            #     page_size=15
-            # ),
-            html.Br(),  # horizontal line
-
-            dash_table.DataTable(
-                id='datatable-interactivity',
-                columns=[
-                        {"name": i, "id": i, "deletable": True, "selectable": True} for i in df.columns
-                ],
-                data=df.fillna(df.mean()).to_dict('records'),
-                editable=True,
-                filter_action="native",
-                sort_action="native",
-                sort_mode="multi",
-                column_selectable="single",
-                row_selectable="multi",
-                row_deletable=True,
-                selected_columns=[],
-                selected_rows=[],
-                page_action="native",
-                page_current=0,
-                page_size=10,
-                style_table={
-                    'overflowY': 'scroll'
-                }
-
-            ),
-
+                                       n_clicks=0, className='bi bi-graph-up-arrow rounded-pill', outline=True, color="primary", disabled=not time_col), width=2)])
         ]
     )
 
@@ -71,10 +55,9 @@ def gen_eda_children(df, name, time_col):
           Input('eda-add-time-plot', 'n_clicks'),
           Input({'type': 'remove-plot', 'index': ALL}, 'n_clicks'),
           State('eda_plots', 'children'),
-          State('datatable-interactivity', "derived_virtual_data"),
-          State('time_col', "data")
-          )
-def modify_eda_plots(n_clicks, n_clicks1, remove_click, children, data, time_col):
+          State('session-id', 'data'))
+def modify_eda_plots(n_clicks, n_clicks1, remove_click, children,session_id):
+    data,time_col = load_data(session_id)
     print(f'modify_eda_plots {dash.callback_context.triggered}')
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
     print(f'modify_eda_plots btn {btn}')
@@ -217,7 +200,7 @@ def modify_plot_info(plot_infos, graph_containers, graphs, time_graphs):
         xelement = find_element_in_props_tree(graph_container, 'xaxis-data')
 
         if xelement and 'value' in xelement and xelement['value']:
-            plot_info = f'plot : {xelement["value"]}'
+            plot_info = f'Plot : {xelement["value"]}'
             yelement = find_element_in_props_tree(
                 graph_container, 'yaxis-data')
             if yelement and 'value' in yelement and yelement['value']:
@@ -228,41 +211,26 @@ def modify_plot_info(plot_infos, graph_containers, graphs, time_graphs):
         yelement = find_element_in_props_tree(
             graph_container, 'yaxis-data-time')
         if yelement and 'value' in yelement and yelement['value']:
-            plot_info = f"time plot : {','.join(yelement['value'])}"
+            plot_info = f"Time Plot : {','.join(yelement['value'])}"
             plot_infos.append(plot_info)
             continue
 
-        plot_infos.append(f'plot {i}')
+        plot_infos.append(f'Plot {i}')
 
     return plot_infos
-
-
-@callback(Output({'type': 'eda-plot-link', 'index': ALL}, 'children'),
-          Input({'type': 'plot_info', 'index': ALL}, 'data'),
-          State({'type': 'eda-plot-link', 'index': ALL}, 'children')
-          )
-def modify_quick_link(plot_infos, plot_links):
-
-    new_plot_links = plot_infos
-
-    # if len(plot_links)!= len(new_plot_links):
-    #     print(f'modify_quick_link plot_links {plot_links}')
-    #     print(f'modify_quick_link new_plot_links {new_plot_links}')
-    #     return plot_links
-    return new_plot_links
 
 
 @callback(Output({'type': 'output-div', 'index': MATCH}, 'children'),
           Output({'type': 'yaxis-data', 'index': MATCH}, 'disabled'),
           Output({'type': 'size-data', 'index': MATCH}, 'disabled'),
           Output({'type': 'color-data', 'index': MATCH}, 'disabled'),
-          Input('datatable-interactivity', "derived_virtual_data"),
           Input({'type': 'xaxis-data', 'index': MATCH}, 'value'),
           Input({'type': 'yaxis-data', 'index': MATCH}, 'value'),
           Input({'type': 'size-data', 'index': MATCH}, 'value'),
-          Input({'type': 'color-data', 'index': MATCH}, 'value')
+          Input({'type': 'color-data', 'index': MATCH}, 'value'),
+          State('session-id', 'data')
           )
-def make_graphs(data, x_data, y_data, size_data, color_data):
+def make_graphs( x_data, y_data, size_data, color_data,session_id):
 
     print(f'make_graphs x_data = {x_data}')
     print(f'make_graphs y_data = {y_data}')
@@ -271,8 +239,8 @@ def make_graphs(data, x_data, y_data, size_data, color_data):
 
     if x_data is None:
         return None, True, True, True
-
-    df = pd.DataFrame(data)
+    
+    df,time_col = load_data(session_id)
 
     if df[x_data].dtype.name == 'object':
         if y_data and df[y_data].dtype.name == 'object':
@@ -298,21 +266,20 @@ def make_graphs(data, x_data, y_data, size_data, color_data):
 
         print(f'make_graphs before px.scatter')
 
-        graph = px.scatter(data,  x=x_data, y=y_data, color=color_data, size=size_col,
+        graph = px.scatter(df,  x=x_data, y=y_data, color=color_data, size=size_col,
                            trendline="ols", marginal_x="histogram", marginal_y="histogram")
     else:
-        graph = px.histogram(data, x=x_data)
+        graph = px.histogram(df, x=x_data)
 
     return dcc.Graph(figure=graph), False, False, False
 
 
 @callback(Output({'type': 'output-div-time', 'index': MATCH}, 'children'),
-          Input('datatable-interactivity', "derived_virtual_data"),
           Input({'type': 'yaxis-data-time', 'index': MATCH}, 'value'),
           Input({'type': 'symbol-data-time', 'index': MATCH}, 'value'),
-          State('time_col', "data")
+          State('session-id', 'data')
           )
-def make_time_graphs(data, y_data, symbol_data, time_col):
+def make_time_graphs(y_data, symbol_data, session_id):
 
     print(f'make_time_graphs y_data = {y_data}')
     print(f'make_time_graphs symbol_data = {symbol_data}')
@@ -320,9 +287,11 @@ def make_time_graphs(data, y_data, symbol_data, time_col):
     if not y_data:
         return []
 
-    df = pd.DataFrame(data)
+    df,time_col = load_data(session_id)
     symbols = [sym for symbol in ['circle','square','hexagram','star', 'diamond', 'hourglass', 'bowtie'] for sym in [symbol,f'{symbol}-open']]
 
     fig = px.line(df, x=time_col, y=y_data, symbol=symbol_data,symbol_sequence = symbols)
 
     return dcc.Graph(figure=fig)
+
+

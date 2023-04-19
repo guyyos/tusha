@@ -162,3 +162,5 @@ cython_debug/
 
 cache/
 dump.rdb
+
+uploaded_files/*

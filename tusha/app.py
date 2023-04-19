@@ -43,3 +43,8 @@ cache = Cache(app.server, config={
     'CACHE_DEFAULT_TIMEOUT': 60*60*24 #seconds - 24hour
 })
 # app.config.suppress_callback_exceptions = True
+
+UPLOAD_DIRECTORY = "uploaded_files"
+
+if not os.path.exists(UPLOAD_DIRECTORY):
+    os.makedirs(UPLOAD_DIRECTORY)

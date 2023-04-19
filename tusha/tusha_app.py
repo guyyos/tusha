@@ -5,17 +5,21 @@ import dash_html_components as html
 import dash_core_components as dcc
 from dash.dependencies import Output, Input, State
 from dash import no_update, ctx
-import base64
 import datetime
 import io
 import pandas as pd
+from dash import Dash, dcc, html, Input, Output, State, MATCH, ALL
+
 
 # Connect to the layout and callbacks of each tab
 from eda import eda_layout, gen_eda_children
+from data_tab import data_layout
+from load_data_tab import load_data_layout
 from causal_model import causal_model_layout, get_causal_model_layout
 from app import app, cache
 import dash_mantine_components as dmc
 from identify_features import find_datetime_col
+
 
 
 # the style arguments for the sidebar. We use position:fixed and a fixed width
@@ -123,64 +127,85 @@ def get_app_tabs():
 
             dbc.Tabs(
                 [
-                    dbc.Tab(label=" Data", tab_id="tab-eda", labelClassName="bi bi-clipboard-data",
+                    dbc.Tab(label=" Load", tab_id="tab-load-data", labelClassName="bi bi-minecart-loaded",
+                            activeLabelClassName="text-danger", children=load_data_layout),
+                    dbc.Tab(label=" Overview", tab_id="tab-data", labelClassName="bi bi-list-columns",
+                            activeLabelClassName="text-danger", children=data_layout),
+                    dbc.Tab(label=" Explore", tab_id="tab-eda", labelClassName="bi bi-clipboard-data",
                             activeLabelClassName="text-danger", children=eda_layout),
                     dbc.Tab(label=" Causal Model", tab_id="tab-causal-model",
                             labelClassName='bi bi-diagram-2',
                             activeLabelClassName="text-danger", children=causal_model_layout),
                 ],
                 id="tabs",
-                active_tab="tab-eda",
+                active_tab="tab-load-data",
             ),
         ], className="mt-3"
     )
 
 
 @app.callback(Output('tabs', 'active_tab'),
-              [Input('change-to-eda-tab', 'n_clicks'),
-              Input('change-to-causal-tab', 'n_clicks')])
-def on_change_tab_click(click1, click2):
+              [Input('change-to-load-data-tab', 'n_clicks'),
+               Input('change-to-data-tab', 'n_clicks'),
+               Input('change-to-eda-tab', 'n_clicks'),
+              Input('change-to-causal-tab', 'n_clicks'),
+              Input('data_tab_layout','children')])
+def on_change_tab_click(click0,click1, click2, click3,data_children):
 
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
-
+    if btn == "change-to-load-data-tab":
+        return "tab-load-data"
+    if btn == "change-to-data-tab":
+        return "tab-data"
     if btn == "change-to-eda-tab":
         return "tab-eda"
-    elif btn == "change-to-causal-tab":
+    if btn == "change-to-causal-tab":
         return "tab-causal-model"
+    
+    if data_children:
+        return 'tab-data'
+    
+    return "tab-load-data"
 
-NO_FILE_LOADED_MSG = 'No file loaded'
 
 sidebar_ = dbc.Card(
     [
         html.Br(),
-        dbc.Col(dcc.Upload(
-            id='upload-data',
-            children=' Upload', #u"\U0001F4BE"+' Load',
-            style = UPLOAD_BUTTON_STYLE,
-            # style={
-            #     # 'width': '100%',
-            #     # 'height': '60px',
-            #     # 'lineHeight': '60px',
-            #     'borderWidth': '1px',
-            #     'borderStyle': 'dashed',
-            #     # 'borderRadius': '5px',
-            #     'textAlign': 'center',
-            #     'color':"blue",
-            #     'outline':True
-            #                     # 'margin': '10px'
-            # },
-            # DONT Allow multiple files to be uploaded
-            multiple=False,
-            className='bi bi-upload rounded-pill'
+        # dbc.Col(dcc.Upload(
+        #     id='upload-data',
+        #     children=' Upload', #u"\U0001F4BE"+' Load',
+        #     style = UPLOAD_BUTTON_STYLE,
+        #     # style={
+        #     #     # 'width': '100%',
+        #     #     # 'height': '60px',
+        #     #     # 'lineHeight': '60px',
+        #     #     'borderWidth': '1px',
+        #     #     'borderStyle': 'dashed',
+        #     #     # 'borderRadius': '5px',
+        #     #     'textAlign': 'center',
+        #     #     'color':"blue",
+        #     #     'outline':True
+        #     #                     # 'margin': '10px'
+        #     # },
+        #     # DONT Allow multiple files to be uploaded
+        #     multiple=False,
+        #     className='bi bi-upload rounded-pill'
 
-        ),width={"size": 3, "offset": '1'}),
-        dbc.Col(dcc.Markdown(NO_FILE_LOADED_MSG, id='loaded_file'),width={"offset": 1}),
+        # ),width={"size": 3, "offset": '1'}),
+        # dbc.Col(dcc.Markdown('', id='loaded_file'),width={"offset": 1}),
+        # html.Hr(),
+        # commands_layout,
+        # html.Hr(),
+        dbc.Col(dbc.Button(' Load', id='change-to-load-data-tab',
+                   n_clicks=0, className='bi bi-minecart-loaded rounded-pill',outline=True, color="primary",
+                   style=BUTTON_STYLE),width={"size": 4, "offset": 1}),
         html.Hr(),
-        commands_layout,
-
-
+        dbc.Col(dbc.Button(' Overview', id='change-to-data-tab',
+                   n_clicks=0, className='bi bi-list-columns rounded-pill',outline=True, color="primary",
+                   style=BUTTON_STYLE),width={"size": 4, "offset": 1}),
+        dbc.Container(children=[], id='quick-links-data'),
         html.Hr(),
-        dbc.Col(dbc.Button(' Data', id='change-to-eda-tab',
+        dbc.Col(dbc.Button(' Explore', id='change-to-eda-tab',
                    n_clicks=0, className='bi bi-clipboard-data rounded-pill',outline=True, color="primary",
                    style=BUTTON_STYLE),width={"size": 4, "offset": 1}),
         dbc.Container(children=[], id='quick-links-eda'),
@@ -207,11 +232,27 @@ sidebar_ = dbc.Card(
     # body=True
 )
 
+@app.callback(Output('quick-links-data', 'children'),
+              Input('data_plots', 'children')
+              )
+def update_quick_links_data(data_plots):
+    print(f'update_quick_links_data data_plots {data_plots}')
+
+    return [
+            dbc.Nav(
+                [dbc.NavLink(id = {'type': 'eda-plot-link', 'index': i},children=f"plot- {i}", 
+                             href=f"#{eda_plot['props']['id']}",external_link=True)
+                 for i, eda_plot in enumerate(data_plots)]+\
+                    [dbc.NavLink(f"Data Table", href=f"#datatable-interactivity", external_link=True)],
+                vertical=True,
+                pills=True,
+            )]
 
 @app.callback(Output('quick-links-eda', 'children'),
               Input('eda_plots', 'children')
               )
 def update_quick_links_eda(eda_plots):
+    print(f'update_quick_links_eda eda_plots {eda_plots}')
 
     if eda_plots:
 
@@ -219,11 +260,27 @@ def update_quick_links_eda(eda_plots):
             dbc.Nav(
                 [dbc.NavLink(id = {'type': 'eda-plot-link', 'index': i},children=f"plot- {i}", 
                              href=f"#{eda_plot['props']['id']}",external_link=True)
-                 for i, eda_plot in enumerate(eda_plots)]+\
-                    [dbc.NavLink(f"Data Table", href=f"#datatable-interactivity", external_link=True)],
+                 for i, eda_plot in enumerate(eda_plots)],
                 vertical=True,
                 pills=True,
             )]
+    return []
+
+
+@app.callback(Output({'type': 'eda-plot-link', 'index': ALL}, 'children'),
+          Input({'type': 'plot_info', 'index': ALL}, 'data')
+            )
+def modify_quick_link(plot_infos):
+    print(f'modify_quick_link: plot_infos = {plot_infos}')
+
+    new_plot_links = plot_infos
+
+    # if len(plot_links)!= len(new_plot_links):
+    #     print(f'modify_quick_link plot_links {plot_links}')
+    #     print(f'modify_quick_link new_plot_links {new_plot_links}')
+    #     return plot_links
+    return new_plot_links
+
 
 
 @app.callback(Output('quick-links-causal', 'children'),
@@ -246,12 +303,12 @@ def update_quick_link_univar_causal(model_res_plots):
 
 sidebar = html.Div(
     [
-        dmc.Affix(dbc.Button(chr(9776) + ' open', id="open-offcanvas", n_clicks=0, className='rounded-pill', outline=True, color="primary"),
+        dmc.Affix(dbc.Button(chr(9776) + ' Navigate', id="open-offcanvas", n_clicks=0, className='rounded-pill', outline=True, color="primary"),
                   position={"bottom": 20, "left": 20}),
         dbc.Offcanvas(
             sidebar_,
             id="offcanvas",
-            title="Commands & links",
+            title="Navigate",
             is_open=False
         ),
     ]
@@ -276,82 +333,6 @@ def serve_layout():
 
 
 app.layout = serve_layout
-
-
-def preprocess_df(df):
-    
-    from pandas.errors import ParserError
-    for c in df.columns[df.dtypes=='object']: #don't cnvt num
-        try:
-            df[c]=pd.to_datetime(df[c])
-        except (ParserError,ValueError): #Can't cnvrt some
-            pass # ...so leave whole column as-is unconverted
-    return df
-
-
-
-def parse_file_contents(contents, filename):
-    content_type, content_string = contents.split(',')
-
-    decoded = base64.b64decode(content_string)
-    try:
-        if 'csv' in filename:
-            # Assume that the user uploaded a CSV file
-            df = pd.read_csv(
-                io.StringIO(decoded.decode('utf-8')))
-        elif 'xls' in filename:
-            # Assume that the user uploaded an excel file
-            df = pd.read_excel(io.BytesIO(decoded))
-
-        preprocess_df(df)
-        
-        return df
-    except Exception as e:
-        print(e)
-        return html.Div([
-            'There was an error processing this file.'
-        ])
-
-
-@app.callback(Output('eda_layout', 'children'),
-              Output('loaded_file', 'children'),
-              Output('change-to-eda-tab', 'n_clicks'),
-              Input('upload-data', 'contents'),
-              State('upload-data', 'filename'),
-              State('upload-data', 'last_modified'),
-              State('session-id', 'data'))
-def update_output(contents, filename, last_modified, session_id):
-
-    if contents:
-
-        last_modified = datetime.datetime.fromtimestamp(last_modified)
-
-        df = parse_file_contents(contents, filename)
-        time_col = find_datetime_col(df)
-
-
-        cache.set(session_id+'_data', df.to_json())
-        cache.set(session_id+'_name', filename)
-        cache.set(session_id+'_time_col', time_col)
-
-        eda_children = gen_eda_children(df, filename,time_col)
-        return eda_children,f'**{filename}**',1
-    return None, NO_FILE_LOADED_MSG,0
-
-
-@app.callback(Output('causal_model_layout', 'children'),
-              Input('eda_layout', 'children'),
-              State('session-id', 'data'))
-def update_causl_model(eda_updated, session_id):
-
-    if eda_updated:
-
-        df = pd.read_json(cache.get(session_id+'_data'))
-        preprocess_df(df)
-
-        eda_children = get_causal_model_layout(df)
-        return eda_children
-
 
 @app.callback(
     Output("offcanvas", "is_open"),

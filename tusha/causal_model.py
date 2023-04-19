@@ -23,8 +23,20 @@ import arviz as az
 import plotly.figure_factory as ff
 import dash_cytoscape as cyto
 from multivar_model_creation_time import create_complete_time_model
+from load_data_tab import load_data
 
 causal_model_layout = html.Div(id='causal_model_layout')
+
+@callback(Output('causal_model_layout', 'children'),
+          Input('prev_file_selector', 'value'),
+          State('session-id', 'data'))
+def update_causal_model(file_updated, session_id):
+
+    if file_updated:
+        df,time_col = load_data(session_id)
+
+        eda_children = get_causal_model_layout(df)
+        return eda_children
 
 # return html.Div(
 #     [
@@ -127,7 +139,7 @@ def get_all_parent_causes(effect_causes,feature):
     return causes
 
 def find_possible_effects(session_id,df_relations,new_cause):
-    df = query_data(session_id)
+    df,time_col = load_data(session_id)
     all_features = df.columns
 
     effect_causes = df_relations.groupby('Effect')['Cause'].apply(list)
@@ -249,22 +261,10 @@ def generate_causal_net(df_relations):
     return net
 
 
-
-
-# @cache.memoize()
-def query_data(session_id):
-    print(f'query_data {session_id}')
-    data = cache.get(session_id+'_data')
-    print(f'query_data data: {str(data)[:100]}...{str(data)[-100:]}')
-
-    return pd.read_json(data)
-
-
 @dash.callback(Output('model-res', 'children'),
                Input('build-model-button', 'n_clicks'),
                [State('session-id', 'data'),
-                State('cause-effect-relations', 'data'),
-                State('time_col', "data")],
+                State('cause-effect-relations', 'data')],
                background=True,
                running=[
     (Output("build-model-button", "disabled"), True, False),
@@ -273,7 +273,7 @@ def query_data(session_id):
     ],
     cancel=[Input("cancel-build", "n_clicks")]
 )
-def build_model(n_clicks, session_id,cause_effect_rels,time_col):
+def build_model(n_clicks, session_id,cause_effect_rels):
     if n_clicks is None or n_clicks<=0:
         return None
 
@@ -288,7 +288,7 @@ def build_model(n_clicks, session_id,cause_effect_rels,time_col):
     #     fig.update_layout(title=fig_name) 
     #     figs.append(dcc.Graph(id = fig_name,figure=fig))
 
-    figs2 = get_model_plots(session_id,df_relations,time_col)
+    figs2 = get_model_plots(session_id,df_relations)
 
     figs+=figs2
     
@@ -296,8 +296,8 @@ def build_model(n_clicks, session_id,cause_effect_rels,time_col):
 
 
 @cache.memoize()
-def get_model_plots(session_id,df_relations,time_col):
-    df = pd.read_json(cache.get(session_id+'_data'))
+def get_model_plots(session_id,df_relations):
+    df,time_col = load_data(session_id)
     df = df.dropna()
     all_figs = []
 
@@ -331,7 +331,7 @@ def get_model_plots(session_id,df_relations,time_col):
 
 @cache.memoize()
 def get_bivariate_plot(session_id,target,feature):
-    df = pd.read_json(cache.get(session_id+'_data'))
+    df,time_col = load_data(session_id)
     df = df.dropna()
     numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
     if feature in df.select_dtypes(include=numerics).columns:
@@ -370,7 +370,7 @@ def get_cat_univariate_plot(df,target):
 
 @cache.memoize()
 def get_univariate_plot(session_id,target):
-    df = pd.read_json(cache.get(session_id+'_data'))
+    df,time_col = load_data(session_id)
     df = df.dropna()
 
     numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
@@ -381,76 +381,4 @@ def get_univariate_plot(session_id,target):
 
     return fig
     
-
-
-# @dash.callback(Output('univar_plot', 'children'),
-#                Input('chosen_univar_plot', 'value'),
-#                State('session-id', 'data'),
-#                background=True,
-#                running=[(Output("chosen_univar_plot", "disabled"), True, False),
-#                         (Output("univar_process_spinner","children"),[dbc.Spinner(size="sm")],[])])
-# def plot_univariate(chosen_univar_plot, session_id):
-#     if chosen_univar_plot is None or chosen_univar_plot=='':
-#         return None
-
-#     print(f'plot_univariate {session_id} {chosen_univar_plot}')
-#     fig = get_univariate_plot(session_id,chosen_univar_plot)
-
-#     return [dcc.Graph(figure=fig)]
-
-
-
-# def get_numeric_univariate_plot(df):
-
-#     numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
-#     idata = create_numerical_univariates_model(df.dropna().select_dtypes(include=numerics))
-#     print(f'get_univariate_plots idata = {idata}')
-#     post = az.extract(idata)
-
-#     print('process_data:')
-#     print(post)
-
-#     # fig = px.histogram(tips, x="total_bill", y="tip", color="sex", marginal="rug",
-#     #                hover_data=tips.columns)
-#     # fig = px.histogram(DataFrame(columns = [param_name],data=az.extract(post)[param_name].values), x=param_name)
-
-#     children = []
-#     cols = []
-
-#     for v in post:
-#         group_labels = [v]
-
-#         fig = ff.create_distplot([post[v].values],group_labels, show_hist=False,show_rug=False)
-#         fig.update_layout(height=300)
-#         fig.update_layout(legend={'entrywidth':0.1,'entrywidthmode':'fraction'})
-
-#         cols.append(dbc.Col(dcc.Graph(figure=fig),width=4))
-#         if len(cols)>=2:
-#             children.append(dbc.Row(cols))
-#             cols = []
-
-#     if len(cols)>0:
-#         children.append(dbc.Row(cols))
-
-#     return children
-
-# def get_cat_univariate_plots(df):
-#     import plotly.figure_factory as ff
-
-#     numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
-#     df = df.dropna().select_dtypes(exclude=numerics)
-#     children = []
-
-#     for col in df.columns:
-#         res = create_categorical_univariate_model(df,col)
-#         print(f'get_cat_univariate_plots res = {res}')
-
-#         group_labels = list(res.keys())
-
-#         fig = ff.create_distplot(list(res.values()),group_labels, show_hist=False,show_rug=False)
-
-#         children.append(dbc.Row(dbc.Col(dcc.Graph(figure=fig),width=4)))
-
-#     return children
-
-
+    
