@@ -95,21 +95,27 @@ def create_new_time_plot(children, data, time_col):
         categorical_columns.remove(time_col)
 
     idx = str(uuid.uuid4())
+    
+    def create_options(vals):
+        return [{"value":val,"label":html.Span(val, style={"font-size": 15, "padding-left": 10})} 
+                                                                       for val in vals]
 
-    symbol_col = [dbc.Label("symbol:" if categorical_columns else ''), dbc.Row(dcc.RadioItems(
-        id={'type': 'symbol-data-time', 'index': idx}, options=categorical_columns, value=None,
+    symbol_col = [dcc.Markdown("**Symbol:**" if categorical_columns else ''), dbc.Row(dcc.RadioItems(
+        id={'type': 'symbol-data-time', 'index': idx}, options=create_options(categorical_columns), value=None,
         labelStyle={"display": "flex", "align-items": "center"}))]
+
 
     new_element = dbc.Container([
         dbc.Row(
             [
-                dbc.Col([dbc.Label("metrics:"), dcc.Checklist(id={'type': 'yaxis-data-time', 'index': idx},
-                                                              options=numeric_columns, value=[],
+                dbc.Col([dcc.Markdown("**Metrics:**"), dcc.Checklist(id={'type': 'yaxis-data-time', 'index': idx},
+                                                              options=create_options(numeric_columns), value=[],
                                                               labelStyle={"display": "flex", "align-items": "center"})], width=2),
                 dbc.Col(
                     html.Div(id={'type': 'output-div-time', 'index': idx})),
                 dbc.Col(symbol_col, width=2),
             ], align="center"),
+        html.Br(),
         dbc.Row([dbc.Col(dbc.Button(id={'type': 'remove-plot', 'index': idx},
                                     n_clicks=0, className='bi bi-trash3 rounded-circle', outline=True, color="primary"), width=1)], align='right'),
         html.Hr(),  # horizontal line
@@ -137,19 +143,20 @@ def create_new_plot(children, data):
     new_element = dbc.Container([
         dbc.Row(
             [
-                dbc.Col([dbc.Label("y:"), dcc.Dropdown(id={'type': 'yaxis-data', 'index': idx}, value=None,
+                dbc.Col([dcc.Markdown("**Y:**"), dcc.Dropdown(id={'type': 'yaxis-data', 'index': idx}, value=None,
                                                        options=[{'label': x, 'value': x} for x in df.columns])], width=2),
                 dbc.Col(
                     html.Div(id={'type': 'output-div', 'index': idx})),
-                dbc.Col([dbc.Label("size:"),
+                dbc.Col([dcc.Markdown("**Size:**"),
                          dbc.Row(dcc.Dropdown(id={'type': 'size-data', 'index': idx}, value=None, disabled=True,
                                               options=[{'label': x, 'value': x} for x in numeric_columns])),
-                         dbc.Label("color:"),
+                         html.Br(),
+                         dcc.Markdown("**Color:**"),
                          dbc.Row(dcc.Dropdown(id={'type': 'color-data', 'index': idx}, value=None,
                                               options=[{'label': x, 'value': x} for x in df.columns]))
                          ], width=2),
             ], align="center"),
-        dbc.Row([dbc.Col([dbc.Label("x:"), dcc.Dropdown(id={'type': 'xaxis-data', 'index': idx}, value=None,
+        dbc.Row([dbc.Col([dcc.Markdown("**X:**"), dcc.Dropdown(id={'type': 'xaxis-data', 'index': idx}, value=None,
                                                         options=[{'label': x, 'value': x} for x in df.columns])], width=2)
                  ], justify="center"),
         dbc.Row([dbc.Col(dbc.Button(id={'type': 'remove-plot', 'index': idx},
