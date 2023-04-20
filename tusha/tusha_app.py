@@ -224,46 +224,41 @@ sidebar_ = dbc.Card(
         dbc.Col(dbc.Button(' Causal', id='change-to-causal-tab',
                    n_clicks=0, className='bi bi-diagram-2 rounded-pill',outline=True, color="primary",
                    style = BUTTON_STYLE),width={"size": 4, "offset": 1}),
-        dbc.Container(children=[], id='quick-links-causal'),
-
-        # dbc.Nav(
-        #     [
-        #         dbc.NavLink("Mid", href="#mid_causal", external_link=True),
-        #         dbc.NavLink("End", href="#end_causal", external_link=True),
-        #     ],
-        #     vertical=True,
-        #     pills=True,
-        # ),
-
-
-    ],
-    # width=2,
-    # style=SIDEBAR_STYLE,
-    # style={'position':'sticky','bottom':0},
-    # body=True
+        dbc.Container(children=[], id='quick-links-causal')
+    ]
 )
 
 @app.callback(Output('quick-links-data', 'children'),
-              Input('data_plots', 'children')
+              Input('overview_plots', 'children')
               )
-def update_quick_links_data(data_plots):
-    print(f'update_quick_links_data data_plots {data_plots}')
+def update_quick_links_data(overview_plots):
+
+    return [dbc.Nav([dbc.NavLink(f"Data Table", href=f"#datatable-interactivity", external_link=True)],vertical=True,
+                pills=True)]
+
+
+@app.callback(Output('quick-links-overview', 'children'),
+              Input({'type': 'overview_plot_info', 'index': ALL}, 'key')
+              )
+def update_quick_links_overview(overview_plots):
+    print(f'update_quick_links_overview overview_plots {overview_plots}')
 
     return [
             dbc.Nav(
-                [dbc.NavLink(id = {'type': 'eda-plot-link', 'index': i},children=f"plot- {i}", 
-                             href=f"#{eda_plot['props']['id']}",external_link=True)
-                 for i, eda_plot in enumerate(data_plots)]+\
-                    [dbc.NavLink(f"Data Table", href=f"#datatable-interactivity", external_link=True)],
+                [dbc.NavLink(id = {'type': 'overview-plot-link', 'index': i},children=overview_plot, 
+                             href=f"#{overview_plot}",external_link=True)
+                 for i, overview_plot in enumerate(overview_plots)],
                 vertical=True,
                 pills=True,
             )]
+
+
 
 @app.callback(Output('quick-links-eda', 'children'),
               Input('eda_plots', 'children')
               )
 def update_quick_links_eda(eda_plots):
-    print(f'update_quick_links_eda eda_plots {eda_plots}')
+    print(f'update_quick_links_eda eda_plots')
 
     if eda_plots:
 

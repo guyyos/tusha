@@ -53,7 +53,7 @@ def gen_overview_children(df, name, time_col):
         ])
 
 
-def get_overview_plots(df, time_col):
+def get_overview_plots_old(df, time_col):
 
     if time_col:
         return get_overview_time_plots(df, time_col)
@@ -64,7 +64,7 @@ def get_overview_plots(df, time_col):
 
     rows = []
 
-    for col in df.columns:
+    for i,col in enumerate(df.columns):
 
         if df[col].dtype.name == 'object':
             col_type = 'Categorical'
@@ -73,7 +73,12 @@ def get_overview_plots(df, time_col):
             col_type = 'Numerical'
             graph = px.histogram(df, x=col, width=600, height=300)
         
-        rows.append(html.Tr([html.Td(col), html.Td(col_type), html.Td(dcc.Graph(figure=graph))]))
+
+        row = html.Tr([html.Td(col), html.Td(col_type), html.Td(dcc.Graph(figure=graph)),
+                dcc.Store(id={'type': 'overview_plot_info', 'index': i}, data=f'Plot {col}')])
+
+        row = dbc.Container(row, id=f'Plot {col}')
+        rows.append(row)
 
     table_body = [html.Tbody(rows)]
 
@@ -81,28 +86,37 @@ def get_overview_plots(df, time_col):
 
     return table
 
-def get_overview_time_plots(df, time_col):
+def get_overview_plots(df, time_col):
+    table_cols = [html.Th("Feature"), html.Th("Type"), html.Th("Distribution")]
+    if time_col:
+        table_cols += [html.Th("Over time")]
+
     table_header = [
-    html.Thead(html.Tr([html.Th("Feature"), html.Th("Type"), html.Th("Distribution"),html.Th("Over time")]))
+    html.Thead(html.Tr(table_cols))
     ]
 
     rows = []
 
-    for col in df.columns:
+    for i,col in enumerate(df.columns):
 
         if df[col].dtype.name == 'object':
             col_type = 'Categorical'
             graph = px.bar(df, x=col,width=600, height=300) 
-            time_graph = px.scatter(df,  x=time_col, y=col,width=600, height=300)
+            time_graph = px.scatter(df,  x=time_col, y=col,width=600, height=300) if time_col else None
         else:
             col_type = 'Numerical'
             graph = px.histogram(df, x=col, width=600, height=300 )
-            time_graph = px.scatter(df,  x=time_col, y=col,width=600, height=300)
+            time_graph = px.scatter(df,  x=time_col, y=col,width=600, height=300) if time_col else None
 
         if col == time_col:
             col_type = 'Time'
 
-        rows.append(html.Tr([html.Td(col), html.Td(col_type), html.Td(dcc.Graph(figure=graph)),  html.Td(dcc.Graph(figure=time_graph))]))
+        cols_info = [html.Td(col,id={'type': 'overview_plot_info', 'index': i},key=f'Plot_{col}'), html.Td(col_type), html.Td(dcc.Graph(figure=graph),id=f'Plot_{col}')]
+        if time_col:
+            cols_info += [html.Td(dcc.Graph(figure=time_graph))]
+
+        row = html.Tr(cols_info)
+        rows.append(row)
 
     table_body = [html.Tbody(rows)]
 
