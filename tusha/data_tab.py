@@ -54,7 +54,6 @@ def gen_data_children(df, name, time_col):
     return html.Div(
         [
             dbc.Row(dbc.Col(html.H5(name), width=2), justify="center"),
-            dbc.Container(id='data_plots', children=get_data_plots(df, time_col)),
             html.P("", id="mid_data"),
             html.Br(),  # horizontal line
 
@@ -84,61 +83,3 @@ def gen_data_children(df, name, time_col):
 
         ]
     )
-
-
-def get_data_plots(df, time_col):
-
-    if time_col:
-        return get_data_time_plots(df, time_col)
-
-    table_header = [
-    html.Thead(html.Tr([html.Th("Feature"), html.Th("Type"), html.Th("Distribution")]))
-    ]
-
-    rows = []
-
-    for col in df.columns:
-
-        if df[col].dtype.name == 'object':
-            col_type = 'Categorical'
-            graph = px.bar(df, x=col,width=600, height=300) #,width=600, height=300 width=800, height=400
-        else:
-            col_type = 'Numerical'
-            graph = px.histogram(df, x=col, width=600, height=300)
-        
-        rows.append(html.Tr([html.Td(col), html.Td(col_type), html.Td(dcc.Graph(figure=graph))]))
-
-    table_body = [html.Tbody(rows)]
-
-    table = dbc.Table(table_header + table_body, bordered=True)
-
-    return table
-
-def get_data_time_plots(df, time_col):
-    table_header = [
-    html.Thead(html.Tr([html.Th("Feature"), html.Th("Type"), html.Th("Distribution"),html.Th("Over time")]))
-    ]
-
-    rows = []
-
-    for col in df.columns:
-
-        if df[col].dtype.name == 'object':
-            col_type = 'Categorical'
-            graph = px.bar(df, x=col,width=600, height=300) 
-            time_graph = px.scatter(df,  x=time_col, y=col,width=600, height=300)
-        else:
-            col_type = 'Numerical'
-            graph = px.histogram(df, x=col, width=600, height=300 )
-            time_graph = px.scatter(df,  x=time_col, y=col,width=600, height=300)
-
-        if col == time_col:
-            col_type = 'Time'
-
-        rows.append(html.Tr([html.Td(col), html.Td(col_type), html.Td(dcc.Graph(figure=graph)),  html.Td(dcc.Graph(figure=time_graph))]))
-
-    table_body = [html.Tbody(rows)]
-
-    table = dbc.Table(table_header + table_body, bordered=True)
-
-    return table

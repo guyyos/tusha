@@ -14,6 +14,7 @@ from dash import Dash, dcc, html, Input, Output, State, MATCH, ALL
 # Connect to the layout and callbacks of each tab
 from eda import eda_layout, gen_eda_children
 from data_tab import data_layout
+from overview_tab import overview_layout
 from load_data_tab import load_data_layout
 from causal_model import causal_model_layout, get_causal_model_layout
 from app import app, cache
@@ -129,9 +130,11 @@ def get_app_tabs():
                 [
                     dbc.Tab(label=" Load", tab_id="tab-load-data", labelClassName="bi bi-minecart-loaded",
                             activeLabelClassName="text-danger", children=load_data_layout),
-                    dbc.Tab(label=" Overview", tab_id="tab-data", labelClassName="bi bi-list-columns",
+                    dbc.Tab(label=" Data", tab_id="tab-data", labelClassName="bi bi-list-columns",
                             activeLabelClassName="text-danger", children=data_layout),
-                    dbc.Tab(label=" Explore", tab_id="tab-eda", labelClassName="bi bi-clipboard-data",
+                    dbc.Tab(label=" Overview", tab_id="tab-overview", labelClassName="bi bi-clipboard-data",
+                            activeLabelClassName="text-danger", children=overview_layout),
+                    dbc.Tab(label=" Explore", tab_id="tab-eda", labelClassName="bi bi-binoculars",
                             activeLabelClassName="text-danger", children=eda_layout),
                     dbc.Tab(label=" Causal Model", tab_id="tab-causal-model",
                             labelClassName='bi bi-diagram-2',
@@ -147,16 +150,19 @@ def get_app_tabs():
 @app.callback(Output('tabs', 'active_tab'),
               [Input('change-to-load-data-tab', 'n_clicks'),
                Input('change-to-data-tab', 'n_clicks'),
+               Input('change-to-overview-tab', 'n_clicks'),
                Input('change-to-eda-tab', 'n_clicks'),
               Input('change-to-causal-tab', 'n_clicks'),
               Input('data_tab_layout','children')])
-def on_change_tab_click(click0,click1, click2, click3,data_children):
+def on_change_tab_click(click0,click1, click2, click3,click4,data_children):
 
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
     if btn == "change-to-load-data-tab":
         return "tab-load-data"
     if btn == "change-to-data-tab":
         return "tab-data"
+    if btn == "change-to-overview-tab":
+        return "tab-overview"
     if btn == "change-to-eda-tab":
         return "tab-eda"
     if btn == "change-to-causal-tab":
@@ -200,13 +206,18 @@ sidebar_ = dbc.Card(
                    n_clicks=0, className='bi bi-minecart-loaded rounded-pill',outline=True, color="primary",
                    style=BUTTON_STYLE),width={"size": 4, "offset": 1}),
         html.Hr(),
-        dbc.Col(dbc.Button(' Overview', id='change-to-data-tab',
+        dbc.Col(dbc.Button(' Data', id='change-to-data-tab',
                    n_clicks=0, className='bi bi-list-columns rounded-pill',outline=True, color="primary",
                    style=BUTTON_STYLE),width={"size": 4, "offset": 1}),
         dbc.Container(children=[], id='quick-links-data'),
         html.Hr(),
-        dbc.Col(dbc.Button(' Explore', id='change-to-eda-tab',
+        dbc.Col(dbc.Button(' Overview', id='change-to-overview-tab',
                    n_clicks=0, className='bi bi-clipboard-data rounded-pill',outline=True, color="primary",
+                   style=BUTTON_STYLE),width={"size": 4, "offset": 1}),
+        dbc.Container(children=[], id='quick-links-overview'),
+        html.Hr(),
+        dbc.Col(dbc.Button(' Explore', id='change-to-eda-tab',
+                   n_clicks=0, className='bi bi-binoculars rounded-pill',outline=True, color="primary",
                    style=BUTTON_STYLE),width={"size": 4, "offset": 1}),
         dbc.Container(children=[], id='quick-links-eda'),
         html.Hr(),
