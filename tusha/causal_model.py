@@ -117,28 +117,33 @@ def get_causal_model_layout(df):
         ),width=5),
         dbc.Col(dbc.Container(id='causal-net', children=[]),width=6)]),
         html.Hr(),
-        dbc.Row([dbc.Col([dbc.Button(id="build-model-button",
+        dbc.Row([dbc.Col(dbc.Button(id="build-model-button",
                                     outline=True, color="primary",
-                n_clicks=0, className='bi bi-hammer rounded-circle'),
-                dbc.Container(id='build_model_spinner', children=[])], width=1),
+                                    n_clicks=0, className='bi bi-hammer rounded-circle'), width=1),
+                
+                dbc.Col(dbc.Button(id="infer-model-button",
+                                    outline=True, color="primary",
+                                    n_clicks=0, className='bi bi-robot rounded-circle'), width=1),
+
                 dbc.Col(dbc.Button(id="cancel-build",outline=True, color="primary",
-                                   n_clicks=0, className='bi bi-x-lg rounded-circle'), width=1)
+                                   n_clicks=0, className='bi bi-x-lg rounded-circle'), width=1),
+
+                dbc.Col(dbc.Container(id='build_model_spinner', children=[]), width=1)
                  ]),
+        dbc.Row(dbc.Toast(
+                            header = "No model to infer. Press build model first",
+                            id="no-model-to-infer-msg",
+                            icon="warning",
+                            duration=4000,
+                            is_open=False,
+                        )),
         dbc.Tooltip("Build model",
                             target="build-model-button"),
-        html.Hr(),
-        dbc.Row([dbc.Col([dbc.Button(id="infer-model-button",
-                                    outline=True, color="primary",
-                n_clicks=0, className='bi bi-robot rounded-circle'),
-                dbc.Container(id='infer_model_spinner', children=[])], width=1),
-                dbc.Col(dbc.Button(id="cancel-infer",outline=True, color="primary",
-                                   n_clicks=0, className='bi bi-x-lg rounded-circle'), width=1)
-                 ]),
         dbc.Tooltip("Inference model",
                             target="infer-model-button"),
+
         html.Hr(),
         dbc.Container(id='model-plate', children=[]),
-        dcc.Store(id='model-binary', storage_type='memory'),
         dbc.Container(id='model-res', children=[])
     ])
 
@@ -218,16 +223,26 @@ def enable_add_relation(new_effect, session_id):
     Output("cause-effect-exists-msg", "is_open"),
     Output('causal-net','children'),
     Input('add-cause-effect', 'n_clicks'),
+    Input('cause-effect-relations', 'data'),
     [State('new_cause', 'value'),
      State('new_effect', 'value'),
-    State('cause-effect-relations', 'data'),
     State('session-id', 'data'),
     State('causal-net','children')]
 )
-def add_cause_effect(add_ce_clicks, new_cause,new_effect, cause_effect_rels,session_id,cur_causal_net):
-
+def add_cause_effect(add_ce_clicks, cause_effect_rels, new_cause,new_effect,session_id,cur_causal_net):
     if add_ce_clicks <=0:
         return cause_effect_rels,False,cur_causal_net
+
+    clean_user_model(session_id)
+
+    btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+    print(f'add_cause_effect btn = {btn}')
+
+    if btn == "cause-effect-relations":
+        df_relations = DataFrame(columns = ['Cause','Effect'],data=cause_effect_rels)
+        causal_net = generate_causal_net(df_relations)
+        return cause_effect_rels,False,[causal_net]
+
     
     df_relations = DataFrame(columns = ['Cause','Effect'],data=cause_effect_rels)
     if len(df_relations[(df_relations['Cause']==new_cause)&(df_relations['Effect']==new_effect)])>0:
@@ -244,7 +259,11 @@ def add_cause_effect(add_ce_clicks, new_cause,new_effect, cause_effect_rels,sess
 
     return cause_effect_rels,False,[causal_net]
 
+
 def generate_causal_net(df_relations):
+    if len(df_relations)<=0:
+        return []
+    
     directed_edges = df_relations.apply(lambda x:{'data': {'id': x['Cause']+x['Effect'], 'source': x['Cause'], 'target': x['Effect']}},axis=1)
 
     nodes = set(df_relations.Cause.unique())|set(df_relations.Effect.unique())
@@ -282,20 +301,35 @@ def generate_causal_net(df_relations):
 
 
 @dash.callback(Output('model-plate', 'children'),
+               Output('model-res', 'children'),
+               Output('no-model-to-infer-msg', "is_open"),
+               Output('no-model-to-infer-msg','header'),
                Input('build-model-button', 'n_clicks'),
+               Input('infer-model-button', 'n_clicks'),
+               Input('model-plate', 'children'),
+               Input('model-res', 'children'),
                [State('session-id', 'data'),
                 State('cause-effect-relations', 'data')],
                background=True,
                running=[
     (Output("build-model-button", "disabled"), True, False),
+    (Output("infer-model-button", "disabled"), True, False),
     (Output("cancel-build", "disabled"), False, True),
     (Output("build_model_spinner","children"),[dbc.Spinner(size="sm")],[])
     ],
     cancel=[Input("cancel-build", "n_clicks")]
 )
-def construct_model(n_clicks, session_id,cause_effect_rels):
-    if n_clicks is None or n_clicks<=0:
-        return None,None
+def construct_model(n_clicks, n_clicks1, model_plate,model_res,session_id,cause_effect_rels):
+    if n_clicks<=0 and n_clicks1<=0:
+        return model_plate,model_res,False,''
+    
+    if len(cause_effect_rels)<=0:
+        return model_plate,model_res,True,'Populate cause-effect table'
+    
+    btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+    if btn == "infer-model-button":
+        infer_figs = infer_model(session_id)
+        return model_plate,infer_figs,infer_figs==None,'No model to infer yes. Press Build model.'
 
     df_relations = DataFrame(columns = ['Cause','Effect'],data=cause_effect_rels)
     figs = []
@@ -308,7 +342,7 @@ def construct_model(n_clicks, session_id,cause_effect_rels):
     #     fig.update_layout(title=fig_name) 
     #     figs.append(dcc.Graph(id = fig_name,figure=fig))
 
-    df,df1,complete_model,graph,topo_order,cat_num_map_per_target,plate_graph = create_model(session_id,df_relations)
+    df,df1,complete_model,graph,topo_order,cat_num_map_per_target,model_plate = create_model(session_id,df_relations)
     save_file('complete_model', session_id, complete_model)
     save_file('graph', session_id, graph)
     save_file('topo_order', session_id, topo_order)
@@ -316,30 +350,19 @@ def construct_model(n_clicks, session_id,cause_effect_rels):
     save_file('df', session_id, df)
     save_file('df1', session_id, df1)
 
-    return plate_graph
+    return model_plate,model_res,False,''
 
-@dash.callback(Output('model-res', 'children'),
-               Input('infer-model-button', 'n_clicks'),
-               [State('session-id', 'data'),
-                State('cause-effect-relations', 'data')],
-               background=True,
-               running=[
-    (Output("infer-model-button", "disabled"), True, False),
-    (Output("cancel-infer", "disabled"), False, True),
-    (Output("infer_model_spinner","children"),[dbc.Spinner(size="sm")],[])
-    ],
-    cancel=[Input("cancel-infer", "n_clicks")]
-)
-def infer_model(n_clicks, session_id,cause_effect_rels):
-    if n_clicks is None or n_clicks<=0:
-        return None,None
+def infer_model(session_id):
     
-    df = load_file('df',session_id)
-    df1 = load_file('df1',session_id)
     complete_model = load_file('complete_model',session_id)
+    if complete_model is None:
+        return None
+
     graph = load_file('graph',session_id)
     topo_order = load_file('topo_order',session_id)
     cat_num_map_per_target = load_file('cat_num_map_per_target',session_id)
+    df = load_file('df',session_id)
+    df1 = load_file('df1',session_id)
 
     figs = create_inference_figs(df,df1,complete_model,graph, topo_order, cat_num_map_per_target)
     
@@ -474,9 +497,21 @@ import os
 def get_upload_dir(session_id):
     return UPLOAD_DIRECTORY+'/'+session_id+'/objs/'
 
+
+def clean_user_model(session_id):
+    dirname = get_upload_dir(session_id)
+    fname = dirname+'complete_model'
+
+    if os.path.isfile(fname):
+        os.remove(fname)
+
+
 def load_file(name,session_id):
     dirname = get_upload_dir(session_id)
     fname = dirname+name
+
+    if not os.path.isfile(fname):
+        return None
 
     with open(fname, 'rb') as handle:
         obj = cloudpickle.load(handle)
