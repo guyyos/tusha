@@ -17,13 +17,20 @@ import numpy as np
 from dash import Dash, dcc, html, Input, Output, State, ctx, MATCH, ALL
 import json
 from model_creation import create_categorical_univariate_model,create_numerical_univariates_model,create_numerical_univariate_model,create_cat_to_num_model,create_num_to_num_model
-from multivar_model_creation import create_complete_model
+from multivar_model_creation import create_complete_model,execute_model
 from plot_creation import create_plots_with_reg_hdi_lines
 import arviz as az
 import plotly.figure_factory as ff
 import dash_cytoscape as cyto
 from multivar_model_creation_time import create_complete_time_model
 from load_data_tab import load_data
+import graphviz
+import base64
+import cloudpickle
+from app import UPLOAD_DIRECTORY
+
+
+
 
 causal_model_layout = html.Div(id='causal_model_layout')
 
@@ -119,6 +126,19 @@ def get_causal_model_layout(df):
                  ]),
         dbc.Tooltip("Build model",
                             target="build-model-button"),
+        html.Hr(),
+        dbc.Row([dbc.Col([dbc.Button(id="infer-model-button",
+                                    outline=True, color="primary",
+                n_clicks=0, className='bi bi-robot rounded-circle'),
+                dbc.Container(id='infer_model_spinner', children=[])], width=1),
+                dbc.Col(dbc.Button(id="cancel-infer",outline=True, color="primary",
+                                   n_clicks=0, className='bi bi-x-lg rounded-circle'), width=1)
+                 ]),
+        dbc.Tooltip("Inference model",
+                            target="infer-model-button"),
+        html.Hr(),
+        dbc.Container(id='model-plate', children=[]),
+        dcc.Store(id='model-binary', storage_type='memory'),
         dbc.Container(id='model-res', children=[])
     ])
 
@@ -261,7 +281,7 @@ def generate_causal_net(df_relations):
     return net
 
 
-@dash.callback(Output('model-res', 'children'),
+@dash.callback(Output('model-plate', 'children'),
                Input('build-model-button', 'n_clicks'),
                [State('session-id', 'data'),
                 State('cause-effect-relations', 'data')],
@@ -273,9 +293,9 @@ def generate_causal_net(df_relations):
     ],
     cancel=[Input("cancel-build", "n_clicks")]
 )
-def build_model(n_clicks, session_id,cause_effect_rels):
+def construct_model(n_clicks, session_id,cause_effect_rels):
     if n_clicks is None or n_clicks<=0:
-        return None
+        return None,None
 
     df_relations = DataFrame(columns = ['Cause','Effect'],data=cause_effect_rels)
     figs = []
@@ -288,24 +308,91 @@ def build_model(n_clicks, session_id,cause_effect_rels):
     #     fig.update_layout(title=fig_name) 
     #     figs.append(dcc.Graph(id = fig_name,figure=fig))
 
-    figs2 = get_model_plots(session_id,df_relations)
+    df,df1,complete_model,graph,topo_order,cat_num_map_per_target,plate_graph = create_model(session_id,df_relations)
+    save_file('complete_model', session_id, complete_model)
+    save_file('graph', session_id, graph)
+    save_file('topo_order', session_id, topo_order)
+    save_file('cat_num_map_per_target', session_id, cat_num_map_per_target)
+    save_file('df', session_id, df)
+    save_file('df1', session_id, df1)
 
-    figs+=figs2
+    return plate_graph
+
+@dash.callback(Output('model-res', 'children'),
+               Input('infer-model-button', 'n_clicks'),
+               [State('session-id', 'data'),
+                State('cause-effect-relations', 'data')],
+               background=True,
+               running=[
+    (Output("infer-model-button", "disabled"), True, False),
+    (Output("cancel-infer", "disabled"), False, True),
+    (Output("infer_model_spinner","children"),[dbc.Spinner(size="sm")],[])
+    ],
+    cancel=[Input("cancel-infer", "n_clicks")]
+)
+def infer_model(n_clicks, session_id,cause_effect_rels):
+    if n_clicks is None or n_clicks<=0:
+        return None,None
+    
+    df = load_file('df',session_id)
+    df1 = load_file('df1',session_id)
+    complete_model = load_file('complete_model',session_id)
+    graph = load_file('graph',session_id)
+    topo_order = load_file('topo_order',session_id)
+    cat_num_map_per_target = load_file('cat_num_map_per_target',session_id)
+
+    figs = create_inference_figs(df,df1,complete_model,graph, topo_order, cat_num_map_per_target)
     
     return figs
 
 
-@cache.memoize()
-def get_model_plots(session_id,df_relations):
+# @cache.memoize()
+def create_model(session_id,df_relations):
     df,time_col = load_data(session_id)
     df = df.dropna()
+
+    #guyguy
+    # if time_col:
+    #     df_temporal,model,res,summary_res,graph = create_complete_time_model(df.copy(),df_relations,time_col)
+    #     df = df_temporal
+    # else:
+    #     model,res,summary_res,graph = create_complete_model(df.copy(),df_relations)
+
+    df1,complete_model,graph,topo_order,cat_num_map_per_target,plate_plot = create_complete_model(df.copy(),df_relations)
+    
+    # Convert Graphviz graph to Plotly figure
+    graphviz_graph = graphviz.Source(plate_plot.source)
+    svg_str = graphviz_graph.pipe(format='svg').decode('utf-8')
+
+    return df,df1,complete_model,graph,topo_order,cat_num_map_per_target,[dcc.Graph(
+        id='example-graph',
+        figure={
+            'data': [],
+            'layout': {
+                'height': 800,  # Adjust this value
+                'images': [{
+                    # 'xref': 'paper',
+                    # 'yref': 'paper',
+                    'x': 0.5,
+                    'y': 0.5,
+                    'sizex': 1,
+                    'sizey': 1,
+                    'xanchor': 'center',
+                    'yanchor': 'middle',
+                    'layer': 'below',
+                    'source': 'data:image/svg+xml;base64,' + base64.b64encode(svg_str.encode('utf-8')).decode('utf-8')
+                }],
+                'xaxis': {'visible': False},
+                'yaxis': {'visible': False}
+            }
+        }
+    )]
+
+
+def create_inference_figs(df,df1,complete_model,graph,topo_order,cat_num_map_per_target):
     all_figs = []
 
-    if time_col:
-        df_temporal,model,res,summary_res,graph = create_complete_time_model(df.copy(),df_relations,time_col)
-        df = df_temporal
-    else:
-        model,res,summary_res,graph = create_complete_model(df.copy(),df_relations)
+    model,res,summary_res,graph = execute_model(df1,complete_model,graph, topo_order, cat_num_map_per_target)
 
     figs =  create_plots_with_reg_hdi_lines(df,summary_res,graph)
 
@@ -382,3 +469,25 @@ def get_univariate_plot(session_id,target):
     return fig
     
     
+import os
+
+def get_upload_dir(session_id):
+    return UPLOAD_DIRECTORY+'/'+session_id+'/objs/'
+
+def load_file(name,session_id):
+    dirname = get_upload_dir(session_id)
+    fname = dirname+name
+
+    with open(fname, 'rb') as handle:
+        obj = cloudpickle.load(handle)
+    return obj
+
+def save_file(name, session_id, content):
+    dirname = get_upload_dir(session_id)
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+    fname = dirname+name
+
+    """Decode and store a file uploaded with Plotly Dash."""
+    with open(fname, 'wb') as handle:
+        cloudpickle.dump(content, handle)

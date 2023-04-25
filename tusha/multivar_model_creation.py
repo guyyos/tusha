@@ -101,7 +101,12 @@ def create_complete_model(df, df_relations):
         predictor_nodes = {p: graph.nodes[p] for p in graph.nodes[n].parent_vars}
         complete_model,cat_num_map_per_target[n] = create_sub_model(df, graph.nodes[n], predictor_nodes, complete_model)
     
-    # return complete_model
+    plate_plot = pm.model_to_graphviz(complete_model)
+
+    return df,complete_model,graph,topo_order,cat_num_map_per_target,plate_plot
+
+
+def execute_model(df,complete_model,graph, topo_order, cat_num_map_per_target):
         
     model, idata = sample_model(complete_model)
     
@@ -142,7 +147,7 @@ def create_cat_num_map(df, node, parent_nodes):
     for cn in categorical_nodes:
         nbr_vars = set(cn.parent_vars+cn.child_vars)
         nbr_num_vars = nbr_vars.intersection(numerical_node_vars)
-        cat_num_map[cn] = nbr_num_vars
+        cat_num_map[cn.name] = nbr_num_vars
 
     return cat_num_map
 
@@ -154,7 +159,9 @@ def create_sub_model(df, target_node, predictor_nodes, complete_model):
     return complete_model,cat_num_map
 
 
-def dot_vecs(vec1,vec2):
+
+
+def dot_vecs(vec1,vec2,dim_target):
     # return at.dot(vec1,vec2)
     print(f'vec1 = {vec1}')
     print(f'vec2 = {vec2}')
@@ -162,8 +169,8 @@ def dot_vecs(vec1,vec2):
     print(f'vec1.shape.eval() = {vec1.shape.eval()}')
     print(f'vec2.shape.eval() = {vec2.shape.eval()}')
 
-    # print(f'vec1.eval() = {vec1.eval()}')
-    # print(f'vec2.eval() = {vec2.eval()}')
+    if dim_target is None: #not categorical target 
+        return vec1*vec2
 
     if len(vec1.shape.eval())<=0 or len(vec2.shape.eval())<=0:
         return at.dot(vec1,vec2)
@@ -174,23 +181,29 @@ def dot_vecs(vec1,vec2):
     return at.dot(mtx1,mtx2)
 
 
+
 def add_sub_model(df, target_node, predictor_nodes, cat_num_map,model):
     target = target_node.name
 
     categorical_predictors = [name for name, n in predictor_nodes.items() if n.info.featureType.is_categorical()]
     numerical_predictors = [name for name, n in predictor_nodes.items() if not n.info.featureType.is_categorical()]
 
+    print(f'add_sub_model: target {target}')
+    print(f'add_sub_model: categorical_predictors {categorical_predictors}')
+    print(f'add_sub_model: numerical_predictors {numerical_predictors}')
+    print(f'add_sub_model: cat_num_map {cat_num_map}')
+
     cat_pred_no_num = list(set(categorical_predictors).difference(
         set([p for p, nps in cat_num_map.items() if len(nps) > 0])))
     num_pred_cat = list(set([v for vs in cat_num_map.values() for v in vs]))
     num_pred_no_cat = list(set(numerical_predictors).difference(num_pred_cat))
 
-    print(f'cat_pred_no_num {cat_pred_no_num}')
-    print(f'num_pred_no_cat {num_pred_no_cat}')
+    print(f'add_sub_model: cat_pred_no_num {cat_pred_no_num}')
+    print(f'add_sub_model: num_pred_no_cat {num_pred_no_cat}')
 
     dim_target = target if target_node.info.featureType == FeatureType.CATEGORICAL else None
 
-    print(f'dim_target {dim_target}')
+    print(f'add_sub_model: dim_target {dim_target}')
 
     with model:
 
@@ -212,27 +225,34 @@ def add_sub_model(df, target_node, predictor_nodes, cat_num_map,model):
         bnum = {p: pm.Normal(
             f'bnum_{target}[{p}]', mu=0, sigma=1, dims=dim_target) for p in num_pred_no_cat}
 
-        all_trends_cn = sum([sum([dot_vecs(bcn[p][nmp][model.named_vars[f'data_{p}']],model.named_vars[f'data_{nmp}']) for nmp in cat_num_map[p]])
+        all_trends_cn = sum([sum([dot_vecs(bcn[p][nmp][model.named_vars[f'data_{p}']],model.named_vars[f'data_{nmp}'],dim_target) for nmp in cat_num_map[p]])
                           for p in categorical_predictors if p in cat_num_map])
 
         all_trends_c = sum([bcat[p][model.named_vars[f'data_{p}']] for p in cat_pred_no_num])
 
-        all_trends_n = sum([dot_vecs(model.named_vars[f'data_{p}'],bnum[p]) for p in num_pred_no_cat])
+        all_trends_n = sum([dot_vecs(model.named_vars[f'data_{p}'],bnum[p],dim_target) for p in num_pred_no_cat])
 
-        print(f'all_trends_cn = {all_trends_cn}')
-        print(f'all_trends_c = {all_trends_c}')
-        print(f'all_trends_n = {all_trends_n}')
+        print(f'add_sub_model: all_trends_cn = {all_trends_cn}')
+        print(f'add_sub_model: all_trends_c = {all_trends_c}')
+        print(f'add_sub_model: all_trends_n = {all_trends_n}')
+
+        if all_trends_cn:
+            print(f'add_sub_model: all_trends_cn = {all_trends_cn.eval()}')
+        if all_trends_c:
+            print(f'add_sub_model: all_trends_c = {all_trends_c.eval()}')
+        if all_trends_n:
+            print(f'add_sub_model: all_trends_n = {all_trends_n.eval()}')
 
         mu = pm.Deterministic(
             f'mu_{target}', a+all_trends_cn+all_trends_c+all_trends_n)
         
-        print(f'mu.shape = {mu.shape.eval()}')
-        print(f'mu.eval = {mu.eval()}')
+        print(f'add_sub_model: mu.shape = {mu.shape.eval()}')
+        print(f'add_sub_model: mu.eval = {mu.eval()}')
 
         if target_node.info.featureType == FeatureType.BOOL:
 
             likelihood = pm.invlogit(mu)
-            print(f'likelihood.shape = {likelihood.shape.eval()}')
+            print(f'add_sub_model: likelihood.shape = {likelihood.shape.eval()}')
 
             target_var = pm.Bernoulli(target,likelihood,shape=likelihood.shape,
                 observed=model.named_vars[f'data_{target}'])
@@ -240,9 +260,9 @@ def add_sub_model(df, target_node, predictor_nodes, cat_num_map,model):
         elif target_node.info.featureType == FeatureType.CATEGORICAL:
 
             p = pm.Deterministic(f'p_{target}',pm.math.softmax(mu,axis=-1))
-            print(f'p.shape = {p.shape.eval()}')
-            print(f'p.shape = {p.shape.eval()}')
-            print(f'p.eval = {p.eval()}')
+            print(f'add_sub_model: p.shape = {p.shape.eval()}')
+            print(f'add_sub_model: p.shape = {p.shape.eval()}')
+            print(f'add_sub_model: p.eval = {p.eval()}')
             target_var = pm.Categorical(target,p=p, shape=p.shape[0], observed=model.named_vars[f'data_{target}'])
             
             #extremly slow!!
@@ -250,7 +270,7 @@ def add_sub_model(df, target_node, predictor_nodes, cat_num_map,model):
 
         else:
             sigma = pm.Uniform(f'sigma_{target}', 0, 20)
-            print(f'mu.shape = {mu.shape.eval()}')
+            print(f'add_sub_model: mu.shape = {mu.shape.eval()}')
 
             target_var = pm.Normal(target, mu=mu, sigma=sigma,shape=mu.shape,
                         observed=model.named_vars[f'data_{target}'])
@@ -474,7 +494,7 @@ def smooth_all_summary(graph,summary_res):
             if predictor_info.featureType == FeatureType.NUMERICAL and target_info.featureType == FeatureType.NUMERICAL:
                 smooth(prediction_summary)
 
-            if target_info.featureType == FeatureType.CATEGORICAL:
+            if target_info.featureType.is_categorical():
                 df_cat_target_data = create_smooth_cat_target_data(prediction_summary,target,predictor,target_info,predictor_info)
                 prediction_summary.df_cat_target_data = df_cat_target_data
 

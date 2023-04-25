@@ -139,6 +139,9 @@ def get_app_tabs():
                     dbc.Tab(label=" Causal Model", tab_id="tab-causal-model",
                             labelClassName='bi bi-diagram-2',
                             activeLabelClassName="text-danger", children=causal_model_layout),
+                    # dbc.Tab(label=" Inference", tab_id="tab-inference-model",
+                    #         labelClassName='bi bi-robot',
+                    #         activeLabelClassName="text-danger", children=infer_model_layout)
                 ],
                 id="tabs",
                 active_tab="tab-load-data",
