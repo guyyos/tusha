@@ -106,6 +106,10 @@ def get_initial_layout():
                                    outline=True, color="primary",
                                    n_clicks=0, className='bi bi-robot rounded-circle'), width=1),
 
+                dbc.Col(dbc.Button(id="download-model-button",
+                                   outline=True, color="primary",
+                                   n_clicks=0, className='bi bi-box-arrow-down rounded-circle'), width=1),
+
                 dbc.Col(dbc.Button(id="cancel-build", outline=True, color="primary",
                                    n_clicks=0, className='bi bi-x-lg rounded-circle'), width=1),
 
@@ -123,6 +127,7 @@ def get_initial_layout():
                     target="build-model-button"),
         dbc.Tooltip("Inference model",
                     target="infer-model-button"),
+        dcc.Download(id="download-model"),
 
         html.Hr(),
         dbc.Container(id='model-plate', children=[])])
@@ -309,6 +314,24 @@ def generate_causal_net(df_relations):
     )
 
     return net
+
+
+@dash.callback(
+    Output("download-model", "data"),
+    Input("download-model-button", "n_clicks"),
+    State('session-id', 'data'),
+    prevent_initial_call=True,
+)
+def func(n_clicks,session_id):
+    
+    fname = get_full_name(session_id,'complete_model')
+
+    if os.path.isfile(fname):
+        return dcc.send_file(fname)
+   
+    # complete_model = load_file('complete_model', session_id)
+    # encoded_data = base64.b64encode(complete_model).decode('utf-8')
+    # return dcc.send_data(encoded_data, filename='model', mimetype='application/octet-stream')
 
 
 @dash.callback(Output('model-plate', 'children'),
@@ -516,18 +539,21 @@ def get_univariate_plot(session_id, target):
 def get_upload_dir(session_id):
     return UPLOAD_DIRECTORY+'/'+session_id+'/objs/'
 
+def get_full_name(session_id,name):
+    dirname = get_upload_dir(session_id)
+    fname = dirname+name+'.obj'
+    return fname
+
 
 def clean_user_model(session_id):
-    dirname = get_upload_dir(session_id)
-    fname = dirname+'complete_model'
-
+    
+    fname = get_full_name(session_id,'complete_model')
     if os.path.isfile(fname):
         os.remove(fname)
 
 
 def load_file(name, session_id):
-    dirname = get_upload_dir(session_id)
-    fname = dirname+name
+    fname = get_full_name(session_id,name)
 
     if not os.path.isfile(fname):
         return None
@@ -541,7 +567,8 @@ def save_file(name, session_id, content):
     dirname = get_upload_dir(session_id)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
-    fname = dirname+name
+
+    fname = get_full_name(session_id,name)
 
     """Decode and store a file uploaded with Plotly Dash."""
     with open(fname, 'wb') as handle:

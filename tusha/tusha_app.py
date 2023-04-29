@@ -180,7 +180,7 @@ def on_change_tab_click(cur_active_tab,click0,click1, click2, click3,click4,data
     if btn == "change-to-causal-tab":
         return "tab-causal-model"
     
-    if btn == 'data_tab_layout':
+    if btn == 'data_tab_layout' and data_children:
         return 'tab-data'
 
     if btn == 'infer_tab_layout' and infer_children:
