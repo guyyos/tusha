@@ -18,8 +18,7 @@ import numpy as np
 from dash import Dash, dcc, html, Input, Output, State, ctx, MATCH, ALL
 import json
 from model_creation import create_categorical_univariate_model, create_numerical_univariates_model, create_numerical_univariate_model, create_cat_to_num_model, create_num_to_num_model
-from multivar_model_creation import create_complete_model, execute_model
-from plot_creation import create_plots_with_reg_hdi_lines
+from multivar_model_creation import create_complete_model
 import arviz as az
 import plotly.figure_factory as ff
 import dash_cytoscape as cyto
@@ -27,8 +26,7 @@ from multivar_model_creation_time import create_complete_time_model
 from load_data_tab import load_data
 import graphviz
 import base64
-import cloudpickle
-from app import UPLOAD_DIRECTORY
+from file_handle import clean_user_model,get_full_name,save_file
 
 
 def get_initial_layout():
@@ -102,14 +100,6 @@ def get_initial_layout():
                                     outline=True, color="primary",
                                     n_clicks=0, className='bi bi-hammer rounded-circle'), width=1),
 
-                dbc.Col(dbc.Button(id="infer-model-button",
-                                   outline=True, color="primary",
-                                   n_clicks=0, className='bi bi-robot rounded-circle'), width=1),
-
-                dbc.Col(dbc.Button(id="download-model-button",
-                                   outline=True, color="primary",
-                                   n_clicks=0, className='bi bi-box-arrow-down rounded-circle'), width=1),
-
                 dbc.Col(dbc.Button(id="cancel-build", outline=True, color="primary",
                                    n_clicks=0, className='bi bi-x-lg rounded-circle'), width=1),
 
@@ -117,17 +107,14 @@ def get_initial_layout():
                     id='build_model_spinner', children=[]), width=1)
                  ]),
         dbc.Row(dbc.Toast(
-            header="No model to infer. Press build model first",
-            id="no-model-to-infer-msg",
+            header="",
+            id="build-model-err-msg",
             icon="warning",
             duration=4000,
             is_open=False,
         )),
         dbc.Tooltip("Build model",
                     target="build-model-button"),
-        dbc.Tooltip("Inference model",
-                    target="infer-model-button"),
-        dcc.Download(id="download-model"),
 
         html.Hr(),
         dbc.Container(id='model-plate', children=[])])
@@ -316,54 +303,29 @@ def generate_causal_net(df_relations):
     return net
 
 
-@dash.callback(
-    Output("download-model", "data"),
-    Input("download-model-button", "n_clicks"),
-    State('session-id', 'data'),
-    prevent_initial_call=True,
-)
-def func(n_clicks,session_id):
-    
-    fname = get_full_name(session_id,'complete_model')
-
-    if os.path.isfile(fname):
-        return dcc.send_file(fname)
-   
-    # complete_model = load_file('complete_model', session_id)
-    # encoded_data = base64.b64encode(complete_model).decode('utf-8')
-    # return dcc.send_data(encoded_data, filename='model', mimetype='application/octet-stream')
-
-
 @dash.callback(Output('model-plate', 'children'),
-               Output('infer_tab_layout', 'children'),
-               Output('no-model-to-infer-msg', "is_open"),
-               Output('no-model-to-infer-msg', 'header'),
+               Output('build-model-err-msg', "is_open"),
+               Output('build-model-err-msg', 'header'),
                Input('build-model-button', 'n_clicks'),
-               Input('infer-model-button', 'n_clicks'),
                Input('model-plate', 'children'),
-               Input('infer_tab_layout', 'children'),
                [State('session-id', 'data'),
                 State('cause-effect-relations', 'data')],
                background=True,
                running=[
     (Output("build-model-button", "disabled"), True, False),
-    (Output("infer-model-button", "disabled"), True, False),
     (Output("cancel-build", "disabled"), False, True),
     (Output("build_model_spinner", "children"), [dbc.Spinner(size="sm")], [])
 ],
     cancel=[Input("cancel-build", "n_clicks")]
 )
-def construct_model(n_clicks, n_clicks1, model_plate, model_res, session_id, cause_effect_rels):
-    if n_clicks <= 0 and n_clicks1 <= 0:
-        return model_plate, model_res, False, ''
+def construct_model(n_clicks, model_plate, session_id, cause_effect_rels):
+    if n_clicks <= 0:
+        return model_plate, False, ''
 
     if len(cause_effect_rels) <= 0:
-        return model_plate, model_res, True, 'Populate cause-effect table'
+        return model_plate, True, 'Populate cause-effect table'
 
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
-    if btn == "infer-model-button":
-        infer_figs = infer_model(session_id)
-        return model_plate, infer_figs, infer_figs == None, 'No model to infer yes. Press Build model.'
 
     df_relations = DataFrame(
         columns=['Cause', 'Effect'], data=cause_effect_rels)
@@ -386,25 +348,7 @@ def construct_model(n_clicks, n_clicks1, model_plate, model_res, session_id, cau
     save_file('df', session_id, df)
     save_file('df1', session_id, df1)
 
-    return model_plate, model_res, False, ''
-
-
-def infer_model(session_id):
-
-    complete_model = load_file('complete_model', session_id)
-    if complete_model is None:
-        return None
-
-    graph = load_file('graph', session_id)
-    topo_order = load_file('topo_order', session_id)
-    cat_num_map_per_target = load_file('cat_num_map_per_target', session_id)
-    df = load_file('df', session_id)
-    df1 = load_file('df1', session_id)
-
-    figs = create_inference_figs(
-        df, df1, complete_model, graph, topo_order, cat_num_map_per_target)
-
-    return figs
+    return model_plate, False, ''
 
 
 # @cache.memoize()
@@ -451,33 +395,6 @@ def create_model(session_id, df_relations):
     )]
 
 
-def create_inference_figs(df, df1, complete_model, graph, topo_order, cat_num_map_per_target):
-    all_figs = []
-
-    model, res, summary_res, graph = execute_model(
-        df1, complete_model, graph, topo_order, cat_num_map_per_target)
-
-    figs = create_plots_with_reg_hdi_lines(df, summary_res, graph)
-
-    for target, target_fig in figs.items():
-
-        for predictor, pred_fig in target_fig.items():
-            fig = pred_fig['fig']
-            predictors = pred_fig['predictors']
-
-            preds = ','.join(
-                [f'<b>{p}</b>' if p == predictor else p for p in predictors])
-            fig_name = f'[{preds}]<b>→{target}</b>'
-            fig.update_layout(title=fig_name)
-            all_figs.append(dcc.Graph(id=fig_name, figure=fig))
-
-            if pred_fig['fig_mu']:
-                fig = pred_fig['fig_mu']
-                fig_name = f'mu: [{predictor}]<b>→{target}</b>'
-                fig.update_layout(title=fig_name)
-                all_figs.append(dcc.Graph(id=fig_name, figure=fig))
-
-    return all_figs
 
 
 @cache.memoize()
@@ -535,41 +452,3 @@ def get_univariate_plot(session_id, target):
 
     return fig
 
-
-def get_upload_dir(session_id):
-    return UPLOAD_DIRECTORY+'/'+session_id+'/objs/'
-
-def get_full_name(session_id,name):
-    dirname = get_upload_dir(session_id)
-    fname = dirname+name+'.obj'
-    return fname
-
-
-def clean_user_model(session_id):
-    
-    fname = get_full_name(session_id,'complete_model')
-    if os.path.isfile(fname):
-        os.remove(fname)
-
-
-def load_file(name, session_id):
-    fname = get_full_name(session_id,name)
-
-    if not os.path.isfile(fname):
-        return None
-
-    with open(fname, 'rb') as handle:
-        obj = cloudpickle.load(handle)
-    return obj
-
-
-def save_file(name, session_id, content):
-    dirname = get_upload_dir(session_id)
-    if not os.path.exists(dirname):
-        os.makedirs(dirname)
-
-    fname = get_full_name(session_id,name)
-
-    """Decode and store a file uploaded with Plotly Dash."""
-    with open(fname, 'wb') as handle:
-        cloudpickle.dump(content, handle)
