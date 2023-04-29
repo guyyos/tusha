@@ -164,10 +164,10 @@ def on_change_tab_click(cur_active_tab,click0,click1, click2, click3,click4,data
     print(f'on_change_tab_click cur_active_tab = {cur_active_tab}')
     print(f'on_change_tab_click btn = {btn}')
 
-    if data_children:
-        print(f'on_change_tab_click data_children = {len(data_children)}')
-    if infer_children:
-        print(f'on_change_tab_click infer_children = {infer_children}')
+    # if data_children:
+    #     print(f'on_change_tab_click data_children = {len(data_children)}')
+    # if infer_children:
+    #     print(f'on_change_tab_click infer_children = {infer_children}')
     
     if btn == "change-to-load-data-tab":
         return "tab-load-data"
