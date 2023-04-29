@@ -16,11 +16,11 @@ from eda import eda_layout, gen_eda_children
 from data_tab import data_layout
 from overview_tab import overview_layout
 from load_data_tab import load_data_layout
-from causal_model import causal_model_layout, get_causal_model_layout
+from infer_tab import infer_layout
+from causal_model import causal_model_layout
 from app import app, cache
 import dash_mantine_components as dmc
 from identify_features import find_datetime_col
-
 
 
 # the style arguments for the sidebar. We use position:fixed and a fixed width
@@ -139,9 +139,9 @@ def get_app_tabs():
                     dbc.Tab(label=" Causal Model", tab_id="tab-causal-model",
                             labelClassName='bi bi-diagram-2',
                             activeLabelClassName="text-danger", children=causal_model_layout),
-                    # dbc.Tab(label=" Inference", tab_id="tab-inference-model",
-                    #         labelClassName='bi bi-robot',
-                    #         activeLabelClassName="text-danger", children=infer_model_layout)
+                    dbc.Tab(label=" Inference", tab_id="tab-inference-model",
+                            labelClassName='bi bi-robot',
+                            activeLabelClassName="text-danger", children=infer_layout)
                 ],
                 id="tabs",
                 active_tab="tab-load-data",
@@ -151,15 +151,24 @@ def get_app_tabs():
 
 
 @app.callback(Output('tabs', 'active_tab'),
-              [Input('change-to-load-data-tab', 'n_clicks'),
+              [Input('tabs', 'active_tab'),Input('change-to-load-data-tab', 'n_clicks'),
                Input('change-to-data-tab', 'n_clicks'),
                Input('change-to-overview-tab', 'n_clicks'),
                Input('change-to-eda-tab', 'n_clicks'),
               Input('change-to-causal-tab', 'n_clicks'),
-              Input('data_tab_layout','children')])
-def on_change_tab_click(click0,click1, click2, click3,click4,data_children):
+              Input('data_tab_layout','children'),
+              Input('infer_tab_layout','children')])
+def on_change_tab_click(cur_active_tab,click0,click1, click2, click3,click4,data_children,infer_children):
 
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+    print(f'on_change_tab_click cur_active_tab = {cur_active_tab}')
+    print(f'on_change_tab_click btn = {btn}')
+
+    if data_children:
+        print(f'on_change_tab_click data_children = {len(data_children)}')
+    if infer_children:
+        print(f'on_change_tab_click infer_children = {infer_children}')
+    
     if btn == "change-to-load-data-tab":
         return "tab-load-data"
     if btn == "change-to-data-tab":
@@ -171,10 +180,14 @@ def on_change_tab_click(click0,click1, click2, click3,click4,data_children):
     if btn == "change-to-causal-tab":
         return "tab-causal-model"
     
-    if data_children:
+    if btn == 'data_tab_layout':
         return 'tab-data'
+
+    if btn == 'infer_tab_layout' and infer_children:
+        return 'tab-inference-model'
     
-    return "tab-load-data"
+    
+    return cur_active_tab
 
 
 sidebar_ = dbc.Card(

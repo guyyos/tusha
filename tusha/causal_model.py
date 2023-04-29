@@ -1,3 +1,4 @@
+import os
 import dash                     # pip install dash
 from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
@@ -16,8 +17,8 @@ import dash_table
 import numpy as np
 from dash import Dash, dcc, html, Input, Output, State, ctx, MATCH, ALL
 import json
-from model_creation import create_categorical_univariate_model,create_numerical_univariates_model,create_numerical_univariate_model,create_cat_to_num_model,create_num_to_num_model
-from multivar_model_creation import create_complete_model,execute_model
+from model_creation import create_categorical_univariate_model, create_numerical_univariates_model, create_numerical_univariate_model, create_cat_to_num_model, create_num_to_num_model
+from multivar_model_creation import create_complete_model, execute_model
 from plot_creation import create_plots_with_reg_hdi_lines
 import arviz as az
 import plotly.figure_factory as ff
@@ -30,30 +31,10 @@ import cloudpickle
 from app import UPLOAD_DIRECTORY
 
 
+def get_initial_layout():
 
-
-causal_model_layout = html.Div(id='causal_model_layout')
-
-@callback(Output('causal_model_layout', 'children'),
-          Input('prev_file_selector', 'value'),
-          State('session-id', 'data'))
-def update_causal_model(file_updated, session_id):
-
-    if file_updated:
-        df,time_col = load_data(session_id)
-
-        eda_children = get_causal_model_layout(df)
-        return eda_children
-
-# return html.Div(
-#     [
-#         dbc.Button(className="bi bi-trash  rounded-circle m-4", outline=True, color="primary"),
-#         dbc.Button(className="bi bi-plus-lg rounded-circle", outline=True, color="primary")
-#     ])
-
-def get_causal_model_layout(df):
-
-    df1 = DataFrame(columns = ['Cause','Effect'])
+    df = DataFrame()
+    df1 = DataFrame(columns=['Cause', 'Effect'])
 
     causal_layout = dbc.Container([
         dcc.Store(data={}, id='causal-graph'),
@@ -64,23 +45,23 @@ def get_causal_model_layout(df):
         #         dbc.Col(dbc.Container(id='univar_plot'), align="center",)]),
         # html.Br(),
         dbc.Row([
-            dbc.Col([dbc.Label("Cause:"), 
-            dcc.Dropdown(id='new_cause', value='',options=[{'label': x, 'value': x} for x in df.columns])], 
-                                                       width=2,align="center"),
+            dbc.Col([dbc.Label("Cause:"),
+                     dcc.Dropdown(id='new_cause', value='', options=[{'label': x, 'value': x} for x in df.columns])],
+                    width=2, align="center"),
 
-            dbc.Col([dbc.Label("Effect:"), 
-            dcc.Dropdown(id='new_effect', value='',options=[],disabled=True)],
-                                                        width=2,align="center"),
+            dbc.Col([dbc.Label("Effect:"),
+                     dcc.Dropdown(id='new_effect', value='', options=[], disabled=True)],
+                    width=2, align="center"),
             dbc.Col(
-                    dbc.Button(id="add-cause-effect", className="bi bi-plus-lg rounded-circle",
-                               outline=True, color="primary", n_clicks=0,disabled=True),
-                               width=2,align="end")
-            ],justify="right"
+                dbc.Button(id="add-cause-effect", className="bi bi-plus-lg rounded-circle",
+                           outline=True, color="primary", n_clicks=0, disabled=True),
+                width=2, align="end")
+        ], justify="right"
         ),
         dbc.Tooltip("Add cause effect relation",
-                            target="add-cause-effect"),
+                    target="add-cause-effect"),
         dbc.Toast(
-            header = "Cause-effect relation already exists",
+            header="Cause-effect relation already exists",
             id="cause-effect-exists-msg",
             icon="warning",
             duration=4000,
@@ -89,101 +70,123 @@ def get_causal_model_layout(df):
 
         html.Hr(),
         dbc.Row([
-        dbc.Col(dash_table.DataTable(
-            id='cause-effect-relations',
-            columns=[
-                {"name": i, "id": i, "deletable": False, "selectable": False} for i in df1.columns
-            ],
-            data=df1.to_dict('records'),
-            editable=True,
-            filter_action="native",
-            sort_action="native",
-            sort_mode="multi",
-            column_selectable="single",
-            row_selectable="multi",
-            row_deletable=True,
-            selected_columns=[],
-            selected_rows=[],
-            page_action="native",
-            page_current=0,
-            page_size=10,
-            style_cell={
-                            # 'padding-right': '30px',
-                            # 'padding-left': '10px',
+            dbc.Col(dash_table.DataTable(
+                id='cause-effect-relations',
+                columns=[
+                    {"name": i, "id": i, "deletable": False, "selectable": False} for i in df1.columns
+                ],
+                data=df1.to_dict('records'),
+                editable=True,
+                filter_action="native",
+                sort_action="native",
+                sort_mode="multi",
+                column_selectable="single",
+                row_selectable="multi",
+                row_deletable=True,
+                selected_columns=[],
+                selected_rows=[],
+                page_action="native",
+                page_current=0,
+                page_size=10,
+                style_cell={
+                    # 'padding-right': '30px',
+                    # 'padding-left': '10px',
                             'text-align': 'center',
                             'marginLeft': 'auto',
                             'marginRight': 'auto'
-                        }
-        ),width=5),
-        dbc.Col(dbc.Container(id='causal-net', children=[]),width=6)]),
+                }
+            ), width=5),
+            dbc.Col(dbc.Container(id='causal-net', children=[]), width=6)]),
         html.Hr(),
         dbc.Row([dbc.Col(dbc.Button(id="build-model-button",
                                     outline=True, color="primary",
                                     n_clicks=0, className='bi bi-hammer rounded-circle'), width=1),
-                
-                dbc.Col(dbc.Button(id="infer-model-button",
-                                    outline=True, color="primary",
-                                    n_clicks=0, className='bi bi-robot rounded-circle'), width=1),
 
-                dbc.Col(dbc.Button(id="cancel-build",outline=True, color="primary",
+                dbc.Col(dbc.Button(id="infer-model-button",
+                                   outline=True, color="primary",
+                                   n_clicks=0, className='bi bi-robot rounded-circle'), width=1),
+
+                dbc.Col(dbc.Button(id="cancel-build", outline=True, color="primary",
                                    n_clicks=0, className='bi bi-x-lg rounded-circle'), width=1),
 
-                dbc.Col(dbc.Container(id='build_model_spinner', children=[]), width=1)
+                dbc.Col(dbc.Container(
+                    id='build_model_spinner', children=[]), width=1)
                  ]),
         dbc.Row(dbc.Toast(
-                            header = "No model to infer. Press build model first",
-                            id="no-model-to-infer-msg",
-                            icon="warning",
-                            duration=4000,
-                            is_open=False,
-                        )),
+            header="No model to infer. Press build model first",
+            id="no-model-to-infer-msg",
+            icon="warning",
+            duration=4000,
+            is_open=False,
+        )),
         dbc.Tooltip("Build model",
-                            target="build-model-button"),
+                    target="build-model-button"),
         dbc.Tooltip("Inference model",
-                            target="infer-model-button"),
+                    target="infer-model-button"),
 
         html.Hr(),
-        dbc.Container(id='model-plate', children=[]),
-        dbc.Container(id='model-res', children=[])
-    ])
+        dbc.Container(id='model-plate', children=[])])
 
     return causal_layout
 
-def get_all_parent_causes(effect_causes,feature):
 
-    def get_all_parent_causes_recurs(effect_causes,feature,causes):
+
+causal_model_layout = html.Div(
+    id='causal_model_layout', children=get_initial_layout())
+
+
+@callback(Output('new_cause', 'options'),
+          Input('prev_file_selector', 'value'),
+          State('session-id', 'data'))
+def populate_cause(file_updated, session_id):
+
+    if file_updated:
+        df, time_col = load_data(session_id)
+        features = list(df.columns)
+        if time_col in features: features.remove(time_col)
+
+        return features
+
+    return []
+
+
+def get_all_parent_causes(effect_causes, feature):
+
+    def get_all_parent_causes_recurs(effect_causes, feature, causes):
         if feature in causes:
             return
         causes.add(feature)
         for cause in effect_causes[feature]:
-            get_all_parent_causes_recurs(effect_causes,cause,causes)
+            get_all_parent_causes_recurs(effect_causes, cause, causes)
 
     causes = set([])
-    get_all_parent_causes_recurs(effect_causes,feature,causes)
+    get_all_parent_causes_recurs(effect_causes, feature, causes)
 
     return causes
 
-def find_possible_effects(session_id,df_relations,new_cause):
-    df,time_col = load_data(session_id)
+
+def find_possible_effects(session_id, df_relations, new_cause):
+    df, time_col = load_data(session_id)
     all_features = df.columns
 
     effect_causes = df_relations.groupby('Effect')['Cause'].apply(list)
 
-    #add features that were not added yet
+    # add features that were not added yet
     for f in all_features:
         if f not in effect_causes:
             effect_causes[f] = []
 
-    causes = get_all_parent_causes(effect_causes,new_cause)
+    causes = get_all_parent_causes(effect_causes, new_cause)
     posibble_effects = [f for f in all_features if f not in causes]
 
     return posibble_effects
 
 
-def remove_existing_relations(df_relations,new_cause,posibble_effects):
-    return [effect for effect in posibble_effects if \
-            len(df_relations)<=0 or \
-            len(df_relations[(df_relations['Cause']==new_cause)&(df_relations['Effect']==effect)])<=0]
+def remove_existing_relations(df_relations, new_cause, posibble_effects):
+    return [effect for effect in posibble_effects if
+            len(df_relations) <= 0 or
+            len(df_relations[(df_relations['Cause'] == new_cause) & (df_relations['Effect'] == effect)]) <= 0]
+
 
 @callback(
     Output('new_effect', 'options'),
@@ -193,17 +196,20 @@ def remove_existing_relations(df_relations,new_cause,posibble_effects):
     State('cause-effect-relations', 'data'),
     State('session-id', 'data')
 )
-def populate_effect(new_cause, cause_effect_rels,session_id):
-    if new_cause is None or new_cause=='':
-        return [],'',True
-    
-    df_relations = DataFrame(columns = ['Cause','Effect'],data=cause_effect_rels)
+def populate_effect(new_cause, cause_effect_rels, session_id):
+    if new_cause is None or new_cause == '':
+        return [], '', True
 
-    posibble_effects = find_possible_effects(session_id,df_relations,new_cause)
-    posibble_effects = remove_existing_relations(df_relations,new_cause,posibble_effects)
-    
-    deafult_effect = posibble_effects[0] if len(posibble_effects)>0 else None
-    return posibble_effects,deafult_effect,False
+    df_relations = DataFrame(
+        columns=['Cause', 'Effect'], data=cause_effect_rels)
+
+    posibble_effects = find_possible_effects(
+        session_id, df_relations, new_cause)
+    posibble_effects = remove_existing_relations(
+        df_relations, new_cause, posibble_effects)
+
+    deafult_effect = posibble_effects[0] if len(posibble_effects) > 0 else None
+    return posibble_effects, deafult_effect, False
 
 
 @callback(
@@ -212,7 +218,7 @@ def populate_effect(new_cause, cause_effect_rels,session_id):
     State('session-id', 'data')
 )
 def enable_add_relation(new_effect, session_id):
-    if new_effect is None or new_effect=='':
+    if new_effect is None or new_effect == '':
         return True
 
     return False
@@ -221,17 +227,17 @@ def enable_add_relation(new_effect, session_id):
 @callback(
     Output('cause-effect-relations', 'data'),
     Output("cause-effect-exists-msg", "is_open"),
-    Output('causal-net','children'),
+    Output('causal-net', 'children'),
     Input('add-cause-effect', 'n_clicks'),
     Input('cause-effect-relations', 'data'),
     [State('new_cause', 'value'),
      State('new_effect', 'value'),
-    State('session-id', 'data'),
-    State('causal-net','children')]
+     State('session-id', 'data'),
+     State('causal-net', 'children')]
 )
-def add_cause_effect(add_ce_clicks, cause_effect_rels, new_cause,new_effect,session_id,cur_causal_net):
-    if add_ce_clicks <=0:
-        return cause_effect_rels,False,cur_causal_net
+def add_cause_effect(add_ce_clicks, cause_effect_rels, new_cause, new_effect, session_id, cur_causal_net):
+    if add_ce_clicks <= 0:
+        return cause_effect_rels, False, cur_causal_net
 
     clean_user_model(session_id)
 
@@ -239,75 +245,80 @@ def add_cause_effect(add_ce_clicks, cause_effect_rels, new_cause,new_effect,sess
     print(f'add_cause_effect btn = {btn}')
 
     if btn == "cause-effect-relations":
-        df_relations = DataFrame(columns = ['Cause','Effect'],data=cause_effect_rels)
+        df_relations = DataFrame(
+            columns=['Cause', 'Effect'], data=cause_effect_rels)
         causal_net = generate_causal_net(df_relations)
-        return cause_effect_rels,False,[causal_net]
+        return cause_effect_rels, False, [causal_net]
 
-    
-    df_relations = DataFrame(columns = ['Cause','Effect'],data=cause_effect_rels)
-    if len(df_relations[(df_relations['Cause']==new_cause)&(df_relations['Effect']==new_effect)])>0:
-        return cause_effect_rels,True,cur_causal_net
+    df_relations = DataFrame(
+        columns=['Cause', 'Effect'], data=cause_effect_rels)
+    if len(df_relations[(df_relations['Cause'] == new_cause) & (df_relations['Effect'] == new_effect)]) > 0:
+        return cause_effect_rels, True, cur_causal_net
 
-    posibble_effects = find_possible_effects(session_id,df_relations,new_cause)
+    posibble_effects = find_possible_effects(
+        session_id, df_relations, new_cause)
 
     if new_effect in posibble_effects:
         cause_effect_rels.append({'Cause': new_cause, 'Effect': new_effect})
 
-    df_relations1 = pd.concat([df_relations,DataFrame([{"Cause": new_cause,"Effect": new_effect}])])
+    df_relations1 = pd.concat([df_relations, DataFrame(
+        [{"Cause": new_cause, "Effect": new_effect}])])
     print(df_relations1)
     causal_net = generate_causal_net(df_relations1)
 
-    return cause_effect_rels,False,[causal_net]
+    return cause_effect_rels, False, [causal_net]
 
 
 def generate_causal_net(df_relations):
-    if len(df_relations)<=0:
+    if len(df_relations) <= 0:
         return []
-    
-    directed_edges = df_relations.apply(lambda x:{'data': {'id': x['Cause']+x['Effect'], 'source': x['Cause'], 'target': x['Effect']}},axis=1)
 
-    nodes = set(df_relations.Cause.unique())|set(df_relations.Effect.unique())
+    directed_edges = df_relations.apply(lambda x: {'data': {
+                                        'id': x['Cause']+x['Effect'], 'source': x['Cause'], 'target': x['Effect']}}, axis=1)
 
-    directed_elements = [{'data': {'id': id_}} for id_ in nodes] + list(directed_edges)
+    nodes = set(df_relations.Cause.unique()) | set(
+        df_relations.Effect.unique())
 
+    directed_elements = [{'data': {'id': id_}}
+                         for id_ in nodes] + list(directed_edges)
 
     net = cyto.Cytoscape(
-            id='net1',
-            layout={'name': 'breadthfirst','animate': True},#cose  breadthfirst
-            style={'height': '250px'},#'width': '40%'
+        id='net1',
+        layout={'name': 'breadthfirst', 'animate': True},  # cose  breadthfirst
+        style={'height': '250px'},  # 'width': '40%'
 
-            stylesheet=[
-        
-                {
-                    'selector': 'node',
-                    'style': {
-                        'label': 'data(id)'
-                    }
-                },
-                {
-                    'selector': 'edge',
-                    'style': {
-                        'curve-style': 'bezier',
-                        'target-arrow-color': 'blue',
-                        'target-arrow-shape': 'vee',
-                        'line-color': 'blue'
-                    }
+        stylesheet=[
+
+            {
+                'selector': 'node',
+                'style': {
+                    'label': 'data(id)'
                 }
-            ],
-            elements=directed_elements
-        )
-    
+            },
+            {
+                'selector': 'edge',
+                'style': {
+                    'curve-style': 'bezier',
+                    'target-arrow-color': 'blue',
+                    'target-arrow-shape': 'vee',
+                    'line-color': 'blue'
+                }
+            }
+        ],
+        elements=directed_elements
+    )
+
     return net
 
 
 @dash.callback(Output('model-plate', 'children'),
-               Output('model-res', 'children'),
+               Output('infer_tab_layout', 'children'),
                Output('no-model-to-infer-msg', "is_open"),
-               Output('no-model-to-infer-msg','header'),
+               Output('no-model-to-infer-msg', 'header'),
                Input('build-model-button', 'n_clicks'),
                Input('infer-model-button', 'n_clicks'),
                Input('model-plate', 'children'),
-               Input('model-res', 'children'),
+               Input('infer_tab_layout', 'children'),
                [State('session-id', 'data'),
                 State('cause-effect-relations', 'data')],
                background=True,
@@ -315,23 +326,24 @@ def generate_causal_net(df_relations):
     (Output("build-model-button", "disabled"), True, False),
     (Output("infer-model-button", "disabled"), True, False),
     (Output("cancel-build", "disabled"), False, True),
-    (Output("build_model_spinner","children"),[dbc.Spinner(size="sm")],[])
-    ],
+    (Output("build_model_spinner", "children"), [dbc.Spinner(size="sm")], [])
+],
     cancel=[Input("cancel-build", "n_clicks")]
 )
-def construct_model(n_clicks, n_clicks1, model_plate,model_res,session_id,cause_effect_rels):
-    if n_clicks<=0 and n_clicks1<=0:
-        return model_plate,model_res,False,''
-    
-    if len(cause_effect_rels)<=0:
-        return model_plate,model_res,True,'Populate cause-effect table'
-    
+def construct_model(n_clicks, n_clicks1, model_plate, model_res, session_id, cause_effect_rels):
+    if n_clicks <= 0 and n_clicks1 <= 0:
+        return model_plate, model_res, False, ''
+
+    if len(cause_effect_rels) <= 0:
+        return model_plate, model_res, True, 'Populate cause-effect table'
+
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
     if btn == "infer-model-button":
         infer_figs = infer_model(session_id)
-        return model_plate,infer_figs,infer_figs==None,'No model to infer yes. Press Build model.'
+        return model_plate, infer_figs, infer_figs == None, 'No model to infer yes. Press Build model.'
 
-    df_relations = DataFrame(columns = ['Cause','Effect'],data=cause_effect_rels)
+    df_relations = DataFrame(
+        columns=['Cause', 'Effect'], data=cause_effect_rels)
     figs = []
 
     # for index, row in df_relations.iterrows():
@@ -339,10 +351,11 @@ def construct_model(n_clicks, n_clicks1, model_plate,model_res,session_id,cause_
     #     print(f'{index} {feature},{target}')
     #     fig = get_bivariate_plot(session_id,target,feature)
     #     fig_name = f'{feature}→{target}'
-    #     fig.update_layout(title=fig_name) 
+    #     fig.update_layout(title=fig_name)
     #     figs.append(dcc.Graph(id = fig_name,figure=fig))
 
-    df,df1,complete_model,graph,topo_order,cat_num_map_per_target,model_plate = create_model(session_id,df_relations)
+    df, df1, complete_model, graph, topo_order, cat_num_map_per_target, model_plate = create_model(
+        session_id, df_relations)
     save_file('complete_model', session_id, complete_model)
     save_file('graph', session_id, graph)
     save_file('topo_order', session_id, topo_order)
@@ -350,44 +363,47 @@ def construct_model(n_clicks, n_clicks1, model_plate,model_res,session_id,cause_
     save_file('df', session_id, df)
     save_file('df1', session_id, df1)
 
-    return model_plate,model_res,False,''
+    return model_plate, model_res, False, ''
+
 
 def infer_model(session_id):
-    
-    complete_model = load_file('complete_model',session_id)
+
+    complete_model = load_file('complete_model', session_id)
     if complete_model is None:
         return None
 
-    graph = load_file('graph',session_id)
-    topo_order = load_file('topo_order',session_id)
-    cat_num_map_per_target = load_file('cat_num_map_per_target',session_id)
-    df = load_file('df',session_id)
-    df1 = load_file('df1',session_id)
+    graph = load_file('graph', session_id)
+    topo_order = load_file('topo_order', session_id)
+    cat_num_map_per_target = load_file('cat_num_map_per_target', session_id)
+    df = load_file('df', session_id)
+    df1 = load_file('df1', session_id)
 
-    figs = create_inference_figs(df,df1,complete_model,graph, topo_order, cat_num_map_per_target)
-    
+    figs = create_inference_figs(
+        df, df1, complete_model, graph, topo_order, cat_num_map_per_target)
+
     return figs
 
 
 # @cache.memoize()
-def create_model(session_id,df_relations):
-    df,time_col = load_data(session_id)
+def create_model(session_id, df_relations):
+    df, time_col = load_data(session_id)
     df = df.dropna()
 
-    #guyguy
+    # guyguy
     # if time_col:
     #     df_temporal,model,res,summary_res,graph = create_complete_time_model(df.copy(),df_relations,time_col)
     #     df = df_temporal
     # else:
     #     model,res,summary_res,graph = create_complete_model(df.copy(),df_relations)
 
-    df1,complete_model,graph,topo_order,cat_num_map_per_target,plate_plot = create_complete_model(df.copy(),df_relations)
-    
+    df1, complete_model, graph, topo_order, cat_num_map_per_target, plate_plot = create_complete_model(
+        df.copy(), df_relations)
+
     # Convert Graphviz graph to Plotly figure
     graphviz_graph = graphviz.Source(plate_plot.source)
     svg_str = graphviz_graph.pipe(format='svg').decode('utf-8')
 
-    return df,df1,complete_model,graph,topo_order,cat_num_map_per_target,[dcc.Graph(
+    return df, df1, complete_model, graph, topo_order, cat_num_map_per_target, [dcc.Graph(
         id='example-graph',
         figure={
             'data': [],
@@ -412,87 +428,90 @@ def create_model(session_id,df_relations):
     )]
 
 
-def create_inference_figs(df,df1,complete_model,graph,topo_order,cat_num_map_per_target):
+def create_inference_figs(df, df1, complete_model, graph, topo_order, cat_num_map_per_target):
     all_figs = []
 
-    model,res,summary_res,graph = execute_model(df1,complete_model,graph, topo_order, cat_num_map_per_target)
+    model, res, summary_res, graph = execute_model(
+        df1, complete_model, graph, topo_order, cat_num_map_per_target)
 
-    figs =  create_plots_with_reg_hdi_lines(df,summary_res,graph)
+    figs = create_plots_with_reg_hdi_lines(df, summary_res, graph)
 
-    for target,target_fig in figs.items():
+    for target, target_fig in figs.items():
 
-        for predictor,pred_fig in target_fig.items():
+        for predictor, pred_fig in target_fig.items():
             fig = pred_fig['fig']
             predictors = pred_fig['predictors']
 
-            preds = ','.join([f'<b>{p}</b>' if p==predictor else p for p in predictors])
+            preds = ','.join(
+                [f'<b>{p}</b>' if p == predictor else p for p in predictors])
             fig_name = f'[{preds}]<b>→{target}</b>'
-            fig.update_layout(title=fig_name) 
-            all_figs.append(dcc.Graph(id = fig_name,figure=fig))
+            fig.update_layout(title=fig_name)
+            all_figs.append(dcc.Graph(id=fig_name, figure=fig))
 
             if pred_fig['fig_mu']:
                 fig = pred_fig['fig_mu']
                 fig_name = f'mu: [{predictor}]<b>→{target}</b>'
-                fig.update_layout(title=fig_name) 
-                all_figs.append(dcc.Graph(id = fig_name,figure=fig))
+                fig.update_layout(title=fig_name)
+                all_figs.append(dcc.Graph(id=fig_name, figure=fig))
 
     return all_figs
 
 
 @cache.memoize()
-def get_bivariate_plot(session_id,target,feature):
-    df,time_col = load_data(session_id)
+def get_bivariate_plot(session_id, target, feature):
+    df, time_col = load_data(session_id)
     df = df.dropna()
     numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
     if feature in df.select_dtypes(include=numerics).columns:
-        fig = create_num_to_num_model(df,target,feature)
+        fig = create_num_to_num_model(df, target, feature)
     else:
-        res = create_cat_to_num_model(df,target,feature)
+        res = create_cat_to_num_model(df, target, feature)
         group_labels = list(res.keys())
-        fig = ff.create_distplot(list(res.values()),group_labels, show_hist=False,show_rug=False)
-
+        fig = ff.create_distplot(
+            list(res.values()), group_labels, show_hist=False, show_rug=False)
 
     return fig
 
 
 @cache.memoize()
-def get_numerical_univariate_plot(df,target):
+def get_numerical_univariate_plot(df, target):
 
-    res = create_numerical_univariate_model(df,target)
+    res = create_numerical_univariate_model(df, target)
     print(f'get_univariate_plots idata = {res}')
 
     group_labels = list(res.keys())
-    fig = ff.create_distplot(list(res.values()),group_labels, show_hist=False,show_rug=False)
+    fig = ff.create_distplot(
+        list(res.values()), group_labels, show_hist=False, show_rug=False)
 
     return fig
 
-@cache.memoize()
-def get_cat_univariate_plot(df,target):
 
-    res = create_categorical_univariate_model(df,target)
+@cache.memoize()
+def get_cat_univariate_plot(df, target):
+
+    res = create_categorical_univariate_model(df, target)
     print(f'get_cat_univariate_plots res = {res}')
 
     group_labels = list(res.keys())
-    fig = ff.create_distplot(list(res.values()),group_labels, show_hist=False,show_rug=False)
+    fig = ff.create_distplot(
+        list(res.values()), group_labels, show_hist=False, show_rug=False)
 
     return fig
 
 
 @cache.memoize()
-def get_univariate_plot(session_id,target):
-    df,time_col = load_data(session_id)
+def get_univariate_plot(session_id, target):
+    df, time_col = load_data(session_id)
     df = df.dropna()
 
     numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
     if target in df.select_dtypes(include=numerics).columns:
-        fig = get_numerical_univariate_plot(df,target)
+        fig = get_numerical_univariate_plot(df, target)
     else:
-        fig = get_cat_univariate_plot(df,target)
+        fig = get_cat_univariate_plot(df, target)
 
     return fig
-    
-    
-import os
+
 
 def get_upload_dir(session_id):
     return UPLOAD_DIRECTORY+'/'+session_id+'/objs/'
@@ -506,7 +525,7 @@ def clean_user_model(session_id):
         os.remove(fname)
 
 
-def load_file(name,session_id):
+def load_file(name, session_id):
     dirname = get_upload_dir(session_id)
     fname = dirname+name
 
@@ -516,6 +535,7 @@ def load_file(name,session_id):
     with open(fname, 'rb') as handle:
         obj = cloudpickle.load(handle)
     return obj
+
 
 def save_file(name, session_id, content):
     dirname = get_upload_dir(session_id)
