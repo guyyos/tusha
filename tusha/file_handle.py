@@ -4,17 +4,17 @@ from app import UPLOAD_DIRECTORY
 
 
 def get_upload_dir(session_id):
-    return UPLOAD_DIRECTORY+'/'+session_id+'/objs/'
+    return UPLOAD_DIRECTORY+'/'+session_id+'/bin/'
 
 def get_full_name(session_id,name):
     dirname = get_upload_dir(session_id)
-    fname = dirname+name+'.obj'
+    fname = dirname+name+'.bin'
     return fname
 
 
 def clean_user_model(session_id):
     
-    fname = get_full_name(session_id,'complete_model')
+    fname = get_full_name(session_id,'model')
     if os.path.isfile(fname):
         os.remove(fname)
 

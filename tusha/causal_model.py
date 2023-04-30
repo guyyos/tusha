@@ -339,9 +339,9 @@ def construct_model(n_clicks, model_plate, session_id, cause_effect_rels):
     #     fig.update_layout(title=fig_name)
     #     figs.append(dcc.Graph(id = fig_name,figure=fig))
 
-    df, df1, complete_model, graph, topo_order, cat_num_map_per_target, model_plate = create_model(
+    df, df1, model, graph, topo_order, cat_num_map_per_target, model_plate = create_model(
         session_id, df_relations)
-    save_file('complete_model', session_id, complete_model)
+    save_file('model', session_id, model)
     save_file('graph', session_id, graph)
     save_file('topo_order', session_id, topo_order)
     save_file('cat_num_map_per_target', session_id, cat_num_map_per_target)
@@ -363,14 +363,14 @@ def create_model(session_id, df_relations):
     # else:
     #     model,res,summary_res,graph = create_complete_model(df.copy(),df_relations)
 
-    df1, complete_model, graph, topo_order, cat_num_map_per_target, plate_plot = create_complete_model(
+    df1, model, graph, topo_order, cat_num_map_per_target, plate_plot = create_complete_model(
         df.copy(), df_relations)
 
     # Convert Graphviz graph to Plotly figure
     graphviz_graph = graphviz.Source(plate_plot.source)
     svg_str = graphviz_graph.pipe(format='svg').decode('utf-8')
 
-    return df, df1, complete_model, graph, topo_order, cat_num_map_per_target, [dcc.Graph(
+    return df, df1, model, graph, topo_order, cat_num_map_per_target, [dcc.Graph(
         id='example-graph',
         figure={
             'data': [],

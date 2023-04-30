@@ -27,24 +27,22 @@ infer_model_component = html.Div(
     className="p-3 m-2 border",
 )
 
-download_explained = html.Ol(children=[html.Li(dbc.Row([dbc.Col('Download model docker file: ', width=7), dbc.Col(dbc.Button(id="download-model-button",
-                                                                                                                             outline=True, color="primary",
-                                                                                                                             n_clicks=0, className='bi bi-box-arrow-down rounded-circle'), width=1),
-                                                        dcc.Download(id="download-model")])),
-                                       html.Li(
-    ['Execute the model docker file on your machine:', html.Ul(children=[html.Li(dcc.Markdown('''
-                                                                                                            ```bash
-                                                                                                            docker run -v "$(pwd)":/app my_image
-                                                                                                            ```'''))])]),
-    html.Li(dbc.Row([dbc.Col('Upload simulation results (results.sim file): ', width=7),
+
+download_step1 = html.Li(dbc.Row([dbc.Col(dcc.Markdown('Download model file (_model.bin_) and execution notebook (_infer.ipynb_):'), width=10), 
+                                  dbc.Col(dbc.Button(id="download-model-button",outline=True, 
+                                                     color="primary",n_clicks=0, className='bi bi-box-arrow-down rounded-circle'), width=1),
+                                                     dcc.Download(id="download-model"),dcc.Download(id="infer-notebook")]))
+
+download_step2 = html.Li(['Execute the notebook on your machine.'])
+
+download_step3 = html.Li(dbc.Row([dbc.Col(dcc.Markdown('Upload simulation results file (_results.bin_): '), width=10),
                      dbc.Col(dcc.Upload(
                          id='upload-sim-results',
                          children=[dbc.Button(id="upload-sim-button",
                                               outline=True, color="primary",
                                               n_clicks=0, className='bi bi-cloud-upload rounded-circle')]), width=1)]))
-],
 
-)
+download_explained = html.Ol(children=[download_step1,html.Br(),download_step2,html.Br(),download_step3],)
 
 download_model_component = html.Div(
     [
@@ -180,17 +178,17 @@ def create_inference_figs(df, df1, complete_model, graph, topo_order, cat_num_ma
 
 @dash.callback(
     Output("download-model", "data"),
+    Output("infer-notebook","data"),
     Input("download-model-button", "n_clicks"),
     State('session-id', 'data'),
     prevent_initial_call=True,
 )
-def func(n_clicks, session_id):
+def download_model(n_clicks, session_id):
 
-    fname = get_full_name(session_id, 'complete_model')
+    fname = get_full_name(session_id, 'model')
 
     if os.path.isfile(fname):
-        return dcc.send_file(fname)
-
-    # complete_model = load_file('complete_model', session_id)
-    # encoded_data = base64.b64encode(complete_model).decode('utf-8')
-    # return dcc.send_data(encoded_data, filename='model', mimetype='application/octet-stream')
+        return dcc.send_file(fname),dcc.send_file('tusha/infer.ipynb')
+    
+    return None,None
+    
