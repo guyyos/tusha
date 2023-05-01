@@ -106,10 +106,8 @@ def create_complete_model(df, df_relations):
     return df,complete_model,graph,topo_order,cat_num_map_per_target,plate_plot
 
 
-def execute_model(df,complete_model,graph, topo_order, cat_num_map_per_target):
-        
-    model, idata = sample_model(complete_model)
-    
+def calc_counterfactual_analysis(df, model, idata,graph, topo_order, cat_num_map_per_target):
+            
     res = calc_counterfactual_predictor(df, model, idata, graph, topo_order, cat_num_map_per_target)
     summary_res = summarize_all_predictions(res,graph)
     smooth_all_summary(graph,summary_res)

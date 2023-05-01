@@ -6,15 +6,16 @@ import dash_core_components as dcc
 from dash.dependencies import Output, Input, State
 from plot_creation import create_plots_with_reg_hdi_lines
 from pandas import DataFrame
-from file_handle import load_file, get_full_name
-from multivar_model_creation import execute_model
+from file_handle import load_file, get_full_name,save_file
+from multivar_model_creation import calc_counterfactual_analysis,sample_model
 import os
+import cloudpickle
 
 
 infer_model_component = html.Div(
     [
         html.Div(
-            "Run inference simulation on our server (might be slow):"), html.Br(),
+            dcc.Markdown("Run inference simulation on our server (**might be slow**):")), html.Br(),
         dbc.Row(children=[dbc.Col(dbc.Button(id="infer-model-button",
                                              outline=True, color="primary",
                                              n_clicks=0, className='bi bi-robot rounded-circle'), width=5),
@@ -42,12 +43,14 @@ download_step3 = html.Li(dbc.Row([dbc.Col(dcc.Markdown('Upload simulation result
                                               outline=True, color="primary",
                                               n_clicks=0, className='bi bi-cloud-upload rounded-circle')]), width=1)]))
 
-download_explained = html.Ol(children=[download_step1,html.Br(),download_step2,html.Br(),download_step3],)
+download_step4 = dbc.Row([dbc.Col(dcc.Markdown(id='loaded_sim_file',children=''), width=10)])
+
+download_explained = html.Ol(children=[download_step1,html.Br(),download_step2,html.Br(),download_step3,download_step4])
 
 download_model_component = html.Div(
     [
         html.Div(
-            "Or Download the model file/execute on your machine/upload simulation results to view:"), html.Br(),
+            dcc.Markdown("**OR**: Download the model file/execute on your machine/upload simulation results to view:")), html.Br(),
 
         dbc.Button(
             "More info",
@@ -63,6 +66,47 @@ download_model_component = html.Div(
         ),
     ], className="p-3 m-2 border"
 )
+
+
+@dash.callback(Output('loaded_sim_file','children'),
+               Input('upload-sim-results', 'contents'),
+            State('upload-sim-results', 'filename'),
+            State('upload-sim-results', 'last_modified'),
+            State('session-id', 'data'))
+def upload_sim_file(contents, filename, last_modified, session_id):
+    print(f'upload_sim_file filename = {filename}')
+    print(f'upload_sim_file last_modified = {last_modified}')
+    if contents:
+        import base64
+        import io
+        import pickle
+
+        content_type, content_string = contents.split(',')
+        decoded = base64.b64decode(content_string)        
+
+        dd = pickle.loads(decoded)
+
+        if type(dd)==dict and 'new_model' in dd and 'idata' in dd:
+                
+            new_model = dd["new_model"]
+            idata = dd["idata"]
+
+            print(f'upload_sim_file type(new_model) = {type(new_model)}')
+            print(f'upload_sim_file type(idata) = {type(idata)}')
+
+            save_file('model_after_sampling', session_id, new_model)
+            save_file('idata', session_id, idata)
+
+            return f'**Loaded** _{filename}_'
+        
+        return 'invalid file'
+
+def load_sampled_model_objs(session_id):
+    
+    model_after_sampling = load_file('model_after_sampling', session_id)
+    idata = load_file('idata', session_id)
+
+    return model_after_sampling,idata
 
 
 @dash.callback(
@@ -107,6 +151,7 @@ infer_layout = html.Div(id='infer_tab_layout',
                Output('infer-model-err-msg', "is_open"),
                Output('infer-model-err-msg', 'header'),
                Input('infer-model-button', 'n_clicks'),
+               Input('loaded_sim_file', 'children'),
                [State('session-id', 'data'),
                 State('cause-effect-relations', 'data')],
                background=True,
@@ -117,22 +162,39 @@ infer_layout = html.Div(id='infer_tab_layout',
 ],
     cancel=[Input("cancel-infer", "n_clicks")]
 )
-def infer_model(n_clicks, session_id, cause_effect_rels):
-    if n_clicks <= 0:
-        return [], False, ''
+def infer_model(n_clicks, loaded_sim_file,session_id, cause_effect_rels):
 
     if len(cause_effect_rels) <= 0:
         return [], True, 'Populate cause-effect table'
 
+
+    res = load_model_objs(session_id)
+    if res is None:
+        return None, True, 'Error: Build a model before!'
+    
+    model,graph,topo_order,cat_num_map_per_target,df,df1 = res
+
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
-    infer_figs = infer_model(session_id)
+    print(f'infer_model btn {btn}')
+
+    if btn == 'infer-model-button':        
+        model_after_sampling,idata = sample_model(model)
+    else:
+        model_after_sampling,idata = load_sampled_model_objs(session_id)
+        if model_after_sampling is None:
+            return None, True, 'Error: No model simulations file to load!'
+
+    
+    infer_figs = create_inference_figs(
+        model_after_sampling, idata,df, df1, graph, topo_order, cat_num_map_per_target)
+
     return infer_figs, infer_figs == None, 'No model to infer yes. Press Build model.'
 
 
-def infer_model(session_id):
+def load_model_objs(session_id):
 
-    complete_model = load_file('complete_model', session_id)
-    if complete_model is None:
+    model = load_file('model', session_id)
+    if model is None:
         return None
 
     graph = load_file('graph', session_id)
@@ -141,17 +203,14 @@ def infer_model(session_id):
     df = load_file('df', session_id)
     df1 = load_file('df1', session_id)
 
-    figs = create_inference_figs(
-        df, df1, complete_model, graph, topo_order, cat_num_map_per_target)
-
-    return figs
+    return model,graph,topo_order,cat_num_map_per_target,df,df1
 
 
-def create_inference_figs(df, df1, complete_model, graph, topo_order, cat_num_map_per_target):
+
+def create_inference_figs(model_after_sampling, idata,df, df1, graph, topo_order, cat_num_map_per_target):
     all_figs = []
 
-    model, res, summary_res, graph = execute_model(
-        df1, complete_model, graph, topo_order, cat_num_map_per_target)
+    model, res, summary_res, graph = calc_counterfactual_analysis(df1,model_after_sampling, idata,graph, topo_order, cat_num_map_per_target)
 
     figs = create_plots_with_reg_hdi_lines(df, summary_res, graph)
 
