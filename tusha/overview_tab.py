@@ -111,7 +111,7 @@ def get_overview_plots(df, time_col):
         if col == time_col:
             col_type = 'Time'
 
-        cols_info = [html.Td(col,id={'type': 'overview_plot_info', 'index': i},key=f'Plot_{col}'), html.Td(col_type), html.Td(dcc.Graph(figure=graph),id=f'Plot_{col}')]
+        cols_info = [html.Td(col,id={'type': 'overview_plot_info', 'index': i},key=f'Plot: {col}'), html.Td(col_type), html.Td(dcc.Graph(figure=graph),id=f'Plot: {col}')]
         if time_col:
             cols_info += [html.Td(dcc.Graph(figure=time_graph))]
 

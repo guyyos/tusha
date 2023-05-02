@@ -136,7 +136,7 @@ def get_app_tabs():
                             activeLabelClassName="text-danger", children=overview_layout),
                     dbc.Tab(label=" Explore", tab_id="tab-eda", labelClassName="bi bi-binoculars",
                             activeLabelClassName="text-danger", children=eda_layout),
-                    dbc.Tab(label=" Causal Model", tab_id="tab-causal-model",
+                    dbc.Tab(label=" Model", tab_id="tab-causal-model",
                             labelClassName='bi bi-diagram-2',
                             activeLabelClassName="text-danger", children=causal_model_layout),
                     dbc.Tab(label=" Inference", tab_id="tab-inference-model",
@@ -156,9 +156,10 @@ def get_app_tabs():
                Input('change-to-overview-tab', 'n_clicks'),
                Input('change-to-eda-tab', 'n_clicks'),
               Input('change-to-causal-tab', 'n_clicks'),
+              Input('change-to-inference-tab', 'n_clicks'),
               Input('data_tab_layout','children'),
               Input('infer_tab_layout','children')])
-def on_change_tab_click(cur_active_tab,click0,click1, click2, click3,click4,data_children,infer_children):
+def on_change_tab_click(cur_active_tab,click0,click1, click2, click3,click4,click5,data_children,infer_children):
 
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
     print(f'on_change_tab_click cur_active_tab = {cur_active_tab}')
@@ -179,7 +180,9 @@ def on_change_tab_click(cur_active_tab,click0,click1, click2, click3,click4,data
         return "tab-eda"
     if btn == "change-to-causal-tab":
         return "tab-causal-model"
-    
+    if btn == "change-to-inference-tab":
+        return "tab-inference-model"
+
     if btn == 'data_tab_layout' and data_children:
         return 'tab-data'
 
@@ -237,10 +240,15 @@ sidebar_ = dbc.Card(
                    style=BUTTON_STYLE),width={"size": 4, "offset": 1}),
         dbc.Container(children=[], id='quick-links-eda'),
         html.Hr(),
-        dbc.Col(dbc.Button(' Causal', id='change-to-causal-tab',
+        dbc.Col(dbc.Button(' Model', id='change-to-causal-tab',
                    n_clicks=0, className='bi bi-diagram-2 rounded-pill',outline=True, color="primary",
                    style = BUTTON_STYLE),width={"size": 4, "offset": 1}),
-        dbc.Container(children=[], id='quick-links-causal')
+        dbc.Container(children=[], id='quick-links-causal'),
+        html.Hr(),
+        dbc.Col(dbc.Button(' Inference', id='change-to-inference-tab',
+                   n_clicks=0, className='bi bi-robot rounded-pill',outline=True, color="primary",
+                   style = BUTTON_STYLE),width={"size": 4, "offset": 1}),
+        dbc.Container(children=[], id='quick-links-inference')
     ]
 )
 
@@ -250,6 +258,56 @@ sidebar_ = dbc.Card(
 def update_quick_links_data(overview_plots):
 
     return [dbc.Nav([dbc.NavLink(f"Data Table", href=f"#datatable-interactivity", external_link=True)],vertical=True,
+                pills=True)]
+
+
+@app.callback(Output('quick-links-inference', 'children'),
+              Input('model-infer-res', 'children')
+              )
+def update_quick_links_inference(model_infer_res):
+    print(f'update_quick_links_inference model_infer_res')
+
+    def clean_name(s):
+        return s.replace('<b>','').replace('</b>','')
+    
+    if model_infer_res:
+
+        return [
+            dbc.Nav(
+                [dbc.NavLink(id = {'type': 'infer-plot-link', 'index': i},children=f"Plot: {clean_name(infer_plot['props']['id'])}", 
+                             href=f"#{infer_plot['props']['id']}",external_link=True)
+                 for i, infer_plot in enumerate(model_infer_res)],
+                vertical=True,
+                pills=True,
+            )]
+    return []
+
+
+# @app.callback(Output('quick-links-causal', 'children'),
+#               Input('model-res', 'children')
+#             )
+# def update_quick_link_univar_causal(model_res_plots):
+
+#     causal_plot_links = [dbc.NavLink(id = f"link_{causal_plot['props']['id']}",children=f"{causal_plot['props']['id']}", 
+#                             href=f"#{causal_plot['props']['id']}",external_link=True)
+#                 for i, causal_plot in enumerate(model_res_plots)] if model_res_plots else []
+    
+#     return [
+#         dbc.Nav(causal_plot_links,
+#             vertical=True,
+#             pills=True,
+#         )]
+
+
+@app.callback(Output('quick-links-causal', 'children'),
+              Input('causal-net', 'children'),
+              Input('model-plate','children')
+              )
+def update_quick_links_causal(causal_net,model_plate):
+
+    return [dbc.Nav([dbc.NavLink(f"Causal graph", href=f"#causal-net", external_link=True)],vertical=True,
+                pills=True),
+            dbc.Nav([dbc.NavLink(f"Model description", href=f"#model-plate", external_link=True)],vertical=True,
                 pills=True)]
 
 
@@ -302,25 +360,6 @@ def modify_quick_link(plot_infos):
     #     print(f'modify_quick_link new_plot_links {new_plot_links}')
     #     return plot_links
     return new_plot_links
-
-
-
-@app.callback(Output('quick-links-causal', 'children'),
-              Input('model-res', 'children')
-            )
-def update_quick_link_univar_causal(model_res_plots):
-
-    causal_plot_links = [dbc.NavLink(id = f"link_{causal_plot['props']['id']}",children=f"{causal_plot['props']['id']}", 
-                            href=f"#{causal_plot['props']['id']}",external_link=True)
-                for i, causal_plot in enumerate(model_res_plots)] if model_res_plots else []
-    
-    return [
-        dbc.Nav(causal_plot_links,
-            vertical=True,
-            pills=True,
-        )]
-
-
 
 
 sidebar = html.Div(

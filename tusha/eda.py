@@ -207,7 +207,7 @@ def modify_plot_info(plot_infos, graph_containers, graphs, time_graphs):
         xelement = find_element_in_props_tree(graph_container, 'xaxis-data')
 
         if xelement and 'value' in xelement and xelement['value']:
-            plot_info = f'Plot : {xelement["value"]}'
+            plot_info = f'Plot: {xelement["value"]}'
             yelement = find_element_in_props_tree(
                 graph_container, 'yaxis-data')
             if yelement and 'value' in yelement and yelement['value']:
@@ -218,11 +218,11 @@ def modify_plot_info(plot_infos, graph_containers, graphs, time_graphs):
         yelement = find_element_in_props_tree(
             graph_container, 'yaxis-data-time')
         if yelement and 'value' in yelement and yelement['value']:
-            plot_info = f"Time Plot : {','.join(yelement['value'])}"
+            plot_info = f"Time Plot: {','.join(yelement['value'])}"
             plot_infos.append(plot_info)
             continue
 
-        plot_infos.append(f'Plot {i}')
+        plot_infos.append(f'Plot: {i}')
 
     return plot_infos
 
