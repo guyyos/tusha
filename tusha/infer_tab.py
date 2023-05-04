@@ -249,7 +249,7 @@ def create_inference_figs(model_after_sampling, idata,df, df1, graph, topo_order
 
             if pred_fig['fig_mu']:
                 fig = pred_fig['fig_mu']
-                fig_name = f'mu: [{predictor}]<b>→{target}</b>'
+                fig_name = f'mu: {fig_name}'
                 fig.update_layout(title=fig_name)
                 all_figs.append(dcc.Graph(id=fig_name, figure=fig))
 
