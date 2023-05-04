@@ -14,6 +14,8 @@ from pymc.sampling import jax
 import pytensor.tensor as pt
 import xarray as xr
 import random
+from functools import partial
+from app import cache
 
 
 
@@ -526,9 +528,19 @@ def smooth_all_summary(graph,summary_res):
     # # adult = pm.Categorical('adult',p=p, observed=None)
     # print(f'adult {adult.shape} {df_adult.values.shape}')
 
-def sample_model(model):
+
+def sample_callback(session_id,total_num_samples,**kwargs):
+    draw = kwargs["draw"]
+    if draw.chain==0: #save progress of only one chain
+        progress = round(draw.draw_idx/total_num_samples*100)
+        cache.set(session_id+'_sample_model_progress',progress)
+
+
+def sample_model(model,session_id):
     with model:
-        idata = pm.sample(1000, tune=1000)
+        num_samples = 1000
+        num_tune = 1000
+        idata = pm.sample(num_samples, tune=num_tune,callback=partial(sample_callback, session_id,num_samples+num_tune))
         # idata = jax.sample_numpyro_nuts(1000, tune=1000) # faster
         # idata = jax.sample_blackjax_nuts() # not working
 

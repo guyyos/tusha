@@ -9,7 +9,7 @@ from pandas import DataFrame
 from file_handle import load_file, get_full_name,save_file
 from multivar_model_creation import calc_counterfactual_analysis,sample_model
 import os
-import cloudpickle
+from app import cache
 
 
 infer_model_component = html.Div(
@@ -23,7 +23,10 @@ infer_model_component = html.Div(
                           dbc.Col(dbc.Button(id="cancel-infer", outline=True, color="primary",
                                              n_clicks=0, className='bi bi-x-lg rounded-circle'), width=5),
                           dbc.Col(dbc.Container(
-                              id='infer_model_spinner', children=[]), width=1)])
+                              id='infer_model_spinner', children=[]), width=1)]),
+        html.Br(),
+        dcc.Interval(id="progress-interval", n_intervals=0, interval=500,disabled=True),
+        dbc.Progress(id="progress")
     ],
     className="p-3 m-2 border",
 )
@@ -139,12 +142,25 @@ infer_layout = html.Div(id='infer_tab_layout',
                             )),
                             dbc.Tooltip("Inference model",
                                         target="infer-model-button"),
-
-
                             html.Hr(),
                             dbc.Container(id='model-infer-res', children=[])
 
                         ])
+
+
+@dash.callback(
+    [Output("progress", "value"), Output("progress", "label")],
+    [Input("progress-interval", "n_intervals")],
+    State('session-id', 'data'),
+)
+def update_progress(n,session_id):
+
+    progress = cache.get(session_id+'_sample_model_progress')
+    if progress is None:
+        return progress,''
+
+    # only add text after 5% progress to ensure text isn't squashed too much
+    return progress, f"{progress} %" if progress >= 5 else ""
 
 
 @dash.callback(Output('model-infer-res', 'children'),
@@ -158,7 +174,9 @@ infer_layout = html.Div(id='infer_tab_layout',
                running=[
     (Output("infer-model-button", "disabled"), True, False),
     (Output("cancel-infer", "disabled"), False, True),
-    (Output("infer_model_spinner", "children"), [dbc.Spinner(size="sm")], [])
+    (Output("infer_model_spinner", "children"), [dbc.Spinner(size="sm")], []),
+    (Output("progress", "style"),{"visibility": "visible"},{"visibility": "hidden"}),
+    (Output("progress-interval", "disabled"), False, True),
 ],
     cancel=[Input("cancel-infer", "n_clicks")]
 )
@@ -178,13 +196,13 @@ def infer_model(n_clicks, loaded_sim_file,session_id, cause_effect_rels):
     print(f'infer_model btn {btn}')
 
     if btn == 'infer-model-button':        
-        model_after_sampling,idata = sample_model(model)
+        
+        model_after_sampling,idata = sample_model(model,session_id)
     else:
         model_after_sampling,idata = load_sampled_model_objs(session_id)
         if model_after_sampling is None:
             return None, True, 'Error: No model simulations file to load!'
 
-    
     infer_figs = create_inference_figs(
         model_after_sampling, idata,df, df1, graph, topo_order, cat_num_map_per_target)
 
@@ -204,7 +222,6 @@ def load_model_objs(session_id):
     df1 = load_file('df1', session_id)
 
     return model,graph,topo_order,cat_num_map_per_target,df,df1
-
 
 
 def create_inference_figs(model_after_sampling, idata,df, df1, graph, topo_order, cat_num_map_per_target):
