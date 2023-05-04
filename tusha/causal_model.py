@@ -370,8 +370,7 @@ def create_model(session_id, df_relations):
     graphviz_graph = graphviz.Source(plate_plot.source)
 
     svg_str = graphviz_graph.pipe(format='svg')
-    plate_image = [html.Img(src='data:image/svg+xml;base64,' + base64.b64encode(svg_str).decode('utf-8'),
-                            style= {'height':'100%', 'width':'100%','resize': 'both','overflow': 'auto'})]
+    plate_image = [html.Img(src='data:image/svg+xml;base64,' + base64.b64encode(svg_str).decode('utf-8'))]
 
     return df, df1, model, graph, topo_order, cat_num_map_per_target, plate_image
 
