@@ -185,11 +185,15 @@ def remove_existing_relations(df_relations, new_cause, posibble_effects):
     Output('new_effect', 'value'),
     Output('new_effect', 'disabled'),
     Input('new_cause', 'value'),
+    Input('prev_file_selector', 'value'),
     State('cause-effect-relations', 'data'),
     State('session-id', 'data')
 )
-def populate_effect(new_cause, cause_effect_rels, session_id):
-    if new_cause is None or new_cause == '':
+def populate_effect(new_cause, file_updated,cause_effect_rels, session_id):
+    btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+    print(f'populate_effect btn {btn}')
+
+    if btn == "prev_file_selector" or new_cause is None or new_cause == '':
         return [], '', True
 
     df_relations = DataFrame(
@@ -222,12 +226,13 @@ def enable_add_relation(new_effect, session_id):
     Output('causal-net', 'children'),
     Input('add-cause-effect', 'n_clicks'),
     Input('cause-effect-relations', 'data'),
+    Input('prev_file_selector', 'value'),
     [State('new_cause', 'value'),
      State('new_effect', 'value'),
      State('session-id', 'data'),
      State('causal-net', 'children')]
 )
-def add_cause_effect(add_ce_clicks, cause_effect_rels, new_cause, new_effect, session_id, cur_causal_net):
+def add_cause_effect(add_ce_clicks, cause_effect_rels, file_updated, new_cause, new_effect, session_id, cur_causal_net):
     if add_ce_clicks <= 0:
         return cause_effect_rels, False, cur_causal_net
 
@@ -235,6 +240,9 @@ def add_cause_effect(add_ce_clicks, cause_effect_rels, new_cause, new_effect, se
 
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
     print(f'add_cause_effect btn = {btn}')
+
+    if btn == "prev_file_selector":
+        return [], False, []
 
     if btn == "cause-effect-relations":
         df_relations = DataFrame(
@@ -308,6 +316,7 @@ def generate_causal_net(df_relations):
                Output('build-model-err-msg', 'header'),
                Input('build-model-button', 'n_clicks'),
                Input('model-plate', 'children'),
+               Input('prev_file_selector', 'value'),
                [State('session-id', 'data'),
                 State('cause-effect-relations', 'data')],
                background=True,
@@ -318,7 +327,7 @@ def generate_causal_net(df_relations):
 ],
     cancel=[Input("cancel-build", "n_clicks")]
 )
-def construct_model(n_clicks, model_plate, session_id, cause_effect_rels):
+def construct_model(n_clicks, model_plate, file_updated, session_id, cause_effect_rels):
     if n_clicks <= 0:
         return model_plate, False, ''
 
@@ -326,6 +335,9 @@ def construct_model(n_clicks, model_plate, session_id, cause_effect_rels):
         return model_plate, True, 'Populate cause-effect table'
 
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+
+    if btn == "prev_file_selector":
+        return [], False, []
 
     df_relations = DataFrame(
         columns=['Cause', 'Effect'], data=cause_effect_rels)
