@@ -30,11 +30,9 @@ data_layout = html.Div(id='data_tab_layout',
 
 @callback(Output('data_tab_layout', 'children'),
           Output('cur_loaded_file','children'),
-          Input('prev_file_selector', 'options'),
-          Input('prev_file_selector', 'value'),
+          Input('cur_data_file','data'),
           State('session-id', 'data'))
-def update_data(prev_files, filename, session_id):
-    print(f'update_data prev_files = {prev_files}')
+def update_data(filename, session_id):
     print(f'update_data filename = {filename}')
     if filename:
 

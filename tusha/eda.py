@@ -19,11 +19,9 @@ eda_layout = html.Div(id='eda_layout')
 
 
 @callback(Output('eda_layout', 'children'),
-          Input('prev_file_selector', 'options'),
-          Input('prev_file_selector', 'value'),
+          Input('cur_data_file','data'),
           State('session-id', 'data'))
-def update_layout(prev_files, filename, session_id):
-    print(f'update_layout prev_files = {prev_files}')
+def update_layout(filename, session_id):
     print(f'update_layout filename = {filename}')
     if filename:
 

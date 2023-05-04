@@ -168,7 +168,7 @@ def update_progress(n,session_id):
                Output('infer-model-err-msg', 'header'),
                Input('infer-model-button', 'n_clicks'),
                Input('loaded_sim_file', 'children'),
-               Input('prev_file_selector', 'value'),
+               Input('cur_data_file','data'),
                [State('session-id', 'data'),
                 State('cause-effect-relations', 'data')],
                background=True,
@@ -186,7 +186,7 @@ def infer_model(n_clicks, loaded_sim_file,file_updated,session_id, cause_effect_
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
     print(f'infer_model btn {btn}')
 
-    if btn == "prev_file_selector":
+    if btn == "cur_data_file":
         return None, False, None
 
     if len(cause_effect_rels) <= 0:

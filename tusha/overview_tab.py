@@ -25,11 +25,9 @@ overview_layout = html.Div(id='overview_tab_layout',
 
 
 @callback(Output('overview_tab_layout', 'children'),
-          Input('prev_file_selector', 'options'),
-          Input('prev_file_selector', 'value'),
+          Input('cur_data_file','data'),
           State('session-id', 'data'))
-def update_overview(prev_files, filename, session_id):
-    print(f'update_overview prev_files = {prev_files}')
+def update_overview(filename, session_id):
     print(f'update_overview filename = {filename}')
     if filename:
 

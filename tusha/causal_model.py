@@ -128,7 +128,7 @@ causal_model_layout = html.Div(
 
 
 @callback(Output('new_cause', 'options'),
-          Input('prev_file_selector', 'value'),
+          Input('cur_data_file','data'),
           State('session-id', 'data'))
 def populate_cause(file_updated, session_id):
 
@@ -185,7 +185,7 @@ def remove_existing_relations(df_relations, new_cause, posibble_effects):
     Output('new_effect', 'value'),
     Output('new_effect', 'disabled'),
     Input('new_cause', 'value'),
-    Input('prev_file_selector', 'value'),
+    Input('cur_data_file','data'),
     State('cause-effect-relations', 'data'),
     State('session-id', 'data')
 )
@@ -193,7 +193,7 @@ def populate_effect(new_cause, file_updated,cause_effect_rels, session_id):
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
     print(f'populate_effect btn {btn}')
 
-    if btn == "prev_file_selector" or new_cause is None or new_cause == '':
+    if btn == "cur_data_file" or new_cause is None or new_cause == '':
         return [], '', True
 
     df_relations = DataFrame(
@@ -226,7 +226,7 @@ def enable_add_relation(new_effect, session_id):
     Output('causal-net', 'children'),
     Input('add-cause-effect', 'n_clicks'),
     Input('cause-effect-relations', 'data'),
-    Input('prev_file_selector', 'value'),
+    Input('cur_data_file','data'),
     [State('new_cause', 'value'),
      State('new_effect', 'value'),
      State('session-id', 'data'),
@@ -241,7 +241,7 @@ def add_cause_effect(add_ce_clicks, cause_effect_rels, file_updated, new_cause, 
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
     print(f'add_cause_effect btn = {btn}')
 
-    if btn == "prev_file_selector":
+    if btn == "cur_data_file":
         return [], False, []
 
     if btn == "cause-effect-relations":
@@ -316,7 +316,7 @@ def generate_causal_net(df_relations):
                Output('build-model-err-msg', 'header'),
                Input('build-model-button', 'n_clicks'),
                Input('model-plate', 'children'),
-               Input('prev_file_selector', 'value'),
+               Input('cur_data_file','data'),
                [State('session-id', 'data'),
                 State('cause-effect-relations', 'data')],
                background=True,
@@ -336,7 +336,7 @@ def construct_model(n_clicks, model_plate, file_updated, session_id, cause_effec
 
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
 
-    if btn == "prev_file_selector":
+    if btn == "cur_data_file":
         return [], False, []
 
     df_relations = DataFrame(

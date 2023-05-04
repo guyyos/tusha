@@ -45,6 +45,7 @@ cache = Cache(app.server, config={
 # app.config.suppress_callback_exceptions = True
 
 UPLOAD_DIRECTORY = "uploaded_files"
+EXAMPLES_DIRECTORY = "examples_data"
 
 if not os.path.exists(UPLOAD_DIRECTORY):
     os.makedirs(UPLOAD_DIRECTORY)
