@@ -368,33 +368,12 @@ def create_model(session_id, df_relations):
 
     # Convert Graphviz graph to Plotly figure
     graphviz_graph = graphviz.Source(plate_plot.source)
-    svg_str = graphviz_graph.pipe(format='svg').decode('utf-8')
 
-    return df, df1, model, graph, topo_order, cat_num_map_per_target, [dcc.Graph(
-        id='example-graph',
-        figure={
-            'data': [],
-            'layout': {
-                'height': 800,  # Adjust this value
-                'images': [{
-                    # 'xref': 'paper',
-                    # 'yref': 'paper',
-                    'x': 0.5,
-                    'y': 0.5,
-                    'sizex': 1,
-                    'sizey': 1,
-                    'xanchor': 'center',
-                    'yanchor': 'middle',
-                    'layer': 'below',
-                    'source': 'data:image/svg+xml;base64,' + base64.b64encode(svg_str.encode('utf-8')).decode('utf-8')
-                }],
-                'xaxis': {'visible': False},
-                'yaxis': {'visible': False}
-            }
-        }
-    )]
+    svg_str = graphviz_graph.pipe(format='svg')
+    plate_image = [html.Img(src='data:image/svg+xml;base64,' + base64.b64encode(svg_str).decode('utf-8'),
+                            style= {'height':'100%', 'width':'100%','resize': 'both','overflow': 'auto'})]
 
-
+    return df, df1, model, graph, topo_order, cat_num_map_per_target, plate_image
 
 
 @cache.memoize()
