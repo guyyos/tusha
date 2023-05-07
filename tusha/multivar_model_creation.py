@@ -336,7 +336,7 @@ def process_couterfactual_predictor(df, model, idata, graph, target, active_pred
             print(f'process_couterfactual_predictor: graph.nodes[target].info.std = {graph.nodes[target].info.std} ')
 
     print(f'process_couterfactual_predictor: graph.nodes[active_predictor].info.featureType = {graph.nodes[active_predictor].info.featureType} ')
-    if graph.nodes[target].info.featureType == FeatureType.NUMERICAL:
+    if graph.nodes[active_predictor].info.featureType == FeatureType.NUMERICAL:
         print(f'process_couterfactual_predictor: graph.nodes[active_predictor].info.mean = {graph.nodes[active_predictor].info.mean} ')
         print(f'process_couterfactual_predictor: graph.nodes[active_predictor].info.std = {graph.nodes[active_predictor].info.std} ')
 
