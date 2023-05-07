@@ -330,6 +330,18 @@ def process_couterfactual_predictor(df, model, idata, graph, target, active_pred
     print(
         f'process_couterfactual_predictor: vars_to_be_blocked = {vars_to_be_blocked}')
 
+    print(f'process_couterfactual_predictor: graph.nodes[target].info.featureType = {graph.nodes[target].info.featureType} ')
+    if graph.nodes[target].info.featureType == FeatureType.NUMERICAL:
+            print(f'process_couterfactual_predictor: graph.nodes[target].info.mean = {graph.nodes[target].info.mean} ')
+            print(f'process_couterfactual_predictor: graph.nodes[target].info.std = {graph.nodes[target].info.std} ')
+
+    print(f'process_couterfactual_predictor: graph.nodes[active_predictor].info.featureType = {graph.nodes[active_predictor].info.featureType} ')
+    if graph.nodes[target].info.featureType == FeatureType.NUMERICAL:
+        print(f'process_couterfactual_predictor: graph.nodes[active_predictor].info.mean = {graph.nodes[active_predictor].info.mean} ')
+        print(f'process_couterfactual_predictor: graph.nodes[active_predictor].info.std = {graph.nodes[active_predictor].info.std} ')
+
+
+
     if graph.nodes[active_predictor].info.featureType.is_categorical():
         cat_codes = [graph.nodes[active_predictor].info.cat_feature_codes_map[c] 
                     for c in graph.nodes[active_predictor].info.cat_feature_codes]
@@ -479,6 +491,8 @@ def smooth_all_summary(graph,summary_res):
             predictor_info = graph.nodes[predictor].info
 
             print(f'smooth_all_summary {predictor} -> {target} ')
+            print(f'smooth_all_summary target_info.featureType = {target_info.featureType} ')
+            print(f'smooth_all_summary predictor_info.featureType = {predictor_info.featureType} ')
 
             if target_info.featureType == FeatureType.NUMERICAL:
                 target_mean = target_info.mean
@@ -487,6 +501,9 @@ def smooth_all_summary(graph,summary_res):
             if predictor_info.featureType == FeatureType.NUMERICAL:
                 predictor_mean = predictor_info.mean
                 predictor_std = predictor_info.std
+
+            print(f'smooth_all_summary target_mean = {target_mean} , target_std = {target_std} ')
+            print(f'smooth_all_summary predictor_mean = {predictor_mean} , predictor_std = {predictor_std}')
 
             unstand(prediction_summary.predictor, prediction_summary,
                     target_mean,target_std,predictor_mean,predictor_std)
@@ -497,8 +514,6 @@ def smooth_all_summary(graph,summary_res):
             if target_info.featureType.is_categorical():
                 df_cat_target_data = create_smooth_cat_target_data(prediction_summary,target,predictor,target_info,predictor_info)
                 prediction_summary.df_cat_target_data = df_cat_target_data
-
-
 
 
 

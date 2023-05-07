@@ -210,8 +210,8 @@ def identify_series(vals):
             ivals = extract_int_vals(vals)
             print(f'ivals = {ivals}')
             if vals_entropy(safe_log(ivals)) > vals_entropy(ivals):
-                return FeatureType.COUNT
-        return FeatureType.ORDINAL
+                return FeatureType.NUMERICAL #FeatureType.COUNT  guyguy - need to change this
+        return FeatureType.NUMERICAL# FeatureType.ORDINAL  guyguy - need to change this
 
     num_possible_float = len(df_vals[df_vals['possible_float']])
 
