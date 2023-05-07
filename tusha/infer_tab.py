@@ -186,6 +186,8 @@ def infer_model(n_clicks, loaded_sim_file,file_updated,session_id, cause_effect_
     btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
     print(f'infer_model btn {btn}')
 
+    cache.set(session_id+'_sample_model_progress',0)
+
     if btn == "cur_data_file":
         return None, False, None
 
