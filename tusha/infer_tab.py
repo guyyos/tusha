@@ -4,7 +4,7 @@ import dash
 import dash_html_components as html
 import dash_core_components as dcc
 from dash.dependencies import Output, Input, State
-from plot_creation import create_plots_with_reg_hdi_lines
+from plot_creation import create_plots_with_reg_hdi_lines,create_plot_with_reg_hdi_lines
 from pandas import DataFrame
 from file_handle import load_file, get_full_name,save_file
 from multivar_model_creation import calc_counterfactual_analysis,sample_model
@@ -125,6 +125,22 @@ def toggle_collapse(n, is_open):
     return not is_open, button_txt
 
 
+infer_plot_component = dbc.Container([
+        dbc.Row(
+            [
+                dbc.Col([dcc.Markdown("**Target:**"), dcc.Dropdown(id='infer_plot_component_target', value=None,options=[])], width=2),
+                dbc.Col(
+                    html.Div(id='infer_plot_component_plot')),
+                dbc.Col([dcc.Markdown("**Value:**"),
+                         dbc.Row(dcc.Dropdown(id='infer_plot_component_predictor_value', value=None, disabled=True,options=[],multi=True,searchable=True)),
+                        html.Br()], width=2),
+            ], align="center"),
+        dbc.Row([dbc.Col([dcc.Markdown("**Predictor:**"), dcc.Dropdown(id='infer_plot_component_predictor', value=None,options=[])], width=2)
+                 ], justify="center"),
+        html.Hr(),  # horizontal line
+    ])
+
+
 infer_layout = html.Div(id='infer_tab_layout',
                         children=[
                             html.Br(),
@@ -143,8 +159,10 @@ infer_layout = html.Div(id='infer_tab_layout',
                             dbc.Tooltip("Inference model",
                                         target="infer-model-button"),
                             html.Hr(),
-                            dbc.Container(id='model-infer-res', children=[])
+                            infer_plot_component,
+                            dbc.Row(dbc.Col(html.H5('All Plots'), width=2), justify="center"),
 
+                            dbc.Container(id='model-infer-res', children=[])
                         ])
 
 
@@ -204,15 +222,109 @@ def infer_model(n_clicks, loaded_sim_file,file_updated,session_id, cause_effect_
     if btn == 'infer-model-button':        
         
         model_after_sampling,idata = sample_model(model,session_id)
+        save_file('model_after_sampling', session_id, model_after_sampling)
+        save_file('idata', session_id, idata)
     else:
         model_after_sampling,idata = load_sampled_model_objs(session_id)
         if model_after_sampling is None:
             return None, True, 'Error: No model simulations file to load!'
 
-    infer_figs = create_inference_figs(
-        model_after_sampling, idata,df, df1, graph, topo_order, cat_num_map_per_target)
+    model, res, summary_res, graph = calc_counterfactual_analysis(df1,model_after_sampling, idata,graph, topo_order, cat_num_map_per_target)
+    save_file('model', session_id, model)
+    save_file('res', session_id, res)
+    save_file('summary_res', session_id, summary_res)
+
+    infer_figs = create_inference_figs(summary_res, df, graph)
 
     return infer_figs, infer_figs == None, 'No model to infer yes. Press Build model.'
+
+
+
+@dash.callback(Output('infer_plot_component_target', 'options'),
+               Output('infer_plot_component_target', 'value'),
+               Output('infer_plot_component_predictor', 'options'),
+               Output('infer_plot_component_predictor', 'value'),
+               Output('infer_plot_component_predictor_value', 'options'),
+               Output('infer_plot_component_predictor_value', 'value'),
+
+               Output('infer_plot_component_target', 'disabled'),
+               Output('infer_plot_component_predictor', 'disabled'),
+               Output('infer_plot_component_predictor_value', 'disabled'),
+
+               Input('model-infer-res', 'children'),
+               Input('cause-effect-relations', 'data'),
+               Input('infer_plot_component_target', 'value'),
+               Input('infer_plot_component_predictor', 'value'),
+               Input('infer_plot_component_predictor_value', 'value'),
+               [State('session-id', 'data'),
+                Input('infer_plot_component_target', 'options'),
+                Input('infer_plot_component_predictor', 'options'),
+                Input('infer_plot_component_predictor_value', 'options')]
+)
+def populate_infer_plot(model_infer_res,cause_effect_rels,target,predictor,predictor_values,
+                        session_id,target_ops,predictor_ops,predictor_value_ops):
+    print(f'populate_infer_plot:predictor_values {predictor_values}')
+
+    def uniq_vals(series):
+        return sorted(list(series.unique()))
+
+    btn = dash.callback_context.triggered[0]["prop_id"].split(".")[0]
+    
+    print(f'populate_infer_plot btn {btn}')
+    df_relations = DataFrame(columns=['Cause', 'Effect'], data=cause_effect_rels)
+    predictor_value_ops = []
+
+    if btn == 'cause-effect-relations':
+        target = predictor = ''
+        predictor_values = []
+        predictor_ops = uniq_vals(df_relations['Cause'])
+        target_ops = ['']
+    elif btn == 'infer_plot_component_predictor':
+        target = ''
+        target_ops = uniq_vals(df_relations[df_relations['Cause']==predictor]['Effect'])
+
+    disabled_target = disabled_predictor = disabled_predictor_value = True
+
+    # print(f'populate_infer_plot model_infer_res = {model_infer_res}')
+    if model_infer_res:
+        disabled_target = disabled_predictor = disabled_predictor_value = False
+
+    if predictor and target:
+        graph = load_file('graph', session_id)
+        predictor_info = graph.nodes[predictor].info
+        predictor_type = predictor_info.featureType
+        if predictor_type.is_categorical():
+            summary_res = load_file('summary_res', session_id)
+            prediction_summary = summary_res[target][predictor]
+            predictor_value_ops = prediction_summary.cat_codes
+
+    return target_ops,target,predictor_ops,predictor,predictor_value_ops,predictor_values,disabled_target,disabled_predictor,disabled_predictor_value
+
+
+@dash.callback(Output('infer_plot_component_plot', 'children'),
+               Input('infer_plot_component_target', "value"),
+               Input('infer_plot_component_predictor', "value"),
+               Input('infer_plot_component_predictor_value', "value"),
+               [State('session-id', 'data')]
+)
+def populate_infer_plot(target,predictor,predictor_values,session_id):
+    if target == '' or predictor=='':
+        return None
+    
+    res = load_model_objs(session_id)
+    if res is None:
+        return None
+    
+    model,graph,topo_order,cat_num_map_per_target,df,df1 = res
+
+    model_after_sampling,idata = load_sampled_model_objs(session_id)
+
+    res = load_file('res', session_id)
+    summary_res = load_file('summary_res', session_id)
+
+    infer_fig = create_inference_fig(target,predictor,predictor_values,summary_res, df, graph)
+
+    return infer_fig
 
 
 def load_model_objs(session_id):
@@ -230,10 +342,17 @@ def load_model_objs(session_id):
     return model,graph,topo_order,cat_num_map_per_target,df,df1
 
 
-def create_inference_figs(model_after_sampling, idata,df, df1, graph, topo_order, cat_num_map_per_target):
-    all_figs = []
+def create_inference_fig(target,predictor,predictor_values,summary_res, df, graph):
+    
+    target_info = graph.nodes[target].info
+    predictor_info = graph.nodes[predictor].info
+    prediction_summary = summary_res[target][predictor]
+    fig,fig_mu = create_plot_with_reg_hdi_lines(df,target,predictor,predictor_values,prediction_summary,target_info,predictor_info)
 
-    model, res, summary_res, graph = calc_counterfactual_analysis(df1,model_after_sampling, idata,graph, topo_order, cat_num_map_per_target)
+    return dcc.Graph(figure=fig)
+
+def create_inference_figs(summary_res, df, graph):
+    all_figs = []
 
     figs = create_plots_with_reg_hdi_lines(df, summary_res, graph)
 

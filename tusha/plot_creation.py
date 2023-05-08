@@ -15,7 +15,7 @@ def create_plots_with_reg_hdi_lines(df,summary_res,graph):
             target_info = graph.nodes[target].info
             predictor_info = graph.nodes[predictor].info
             
-            fig,fig_mu = create_plot_with_reg_hdi_lines(df,target,predictor,prediction_summary,target_info,predictor_info)
+            fig,fig_mu = create_plot_with_reg_hdi_lines(df,target,predictor,[],prediction_summary,target_info,predictor_info)
 
             figs[target][predictor] = {}
             figs[target][predictor]['fig'] = fig
@@ -25,8 +25,7 @@ def create_plots_with_reg_hdi_lines(df,summary_res,graph):
     return figs
 
 
-
-def create_plot_with_reg_hdi_lines(df,target,predictor,prediction_summary,target_info,predictor_info):
+def create_plot_with_reg_hdi_lines(df,target,predictor,predictor_values,prediction_summary,target_info,predictor_info):
     fig_mu = None
 
     target_type = target_info.featureType
@@ -43,8 +42,9 @@ def create_plot_with_reg_hdi_lines(df,target,predictor,prediction_summary,target
         for cat_val,vals,mu_vals in zip(prediction_summary.cat_codes,
                                         prediction_summary.target_pred.values,prediction_summary.mu_pred.values):
 
-            for v,mv in zip(vals,mu_vals):
-                data.append({predictor:cat_val,target:v,f'{target}_mu':mv})
+            if not predictor_values or cat_val in predictor_values: 
+                for v,mv in zip(vals,mu_vals):
+                    data.append({predictor:cat_val,target:v,f'{target}_mu':mv})
 
         df_vals = DataFrame(data)
 
