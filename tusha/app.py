@@ -32,7 +32,7 @@ app = dash.Dash(app_name, suppress_callback_exceptions=True,  external_styleshee
                             'content': 'width=device-width, initial-scale=1.0'}]
                 )
 
-app.title = 'Data Causal Assistant'
+app.title = 'Data Causal Wizard'
 
 print(f'guyguy {app._favicon}')
 

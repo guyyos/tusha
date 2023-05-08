@@ -380,7 +380,7 @@ def get_content():
     return dbc.Container([
         dbc.Row(html.H1('')),dbc.Row(html.H1('')),
         dbc.Row([dbc.Col([dbc.Row(html.H2(" Tusha",
-                        style={"textAlign": "left"},className='fa-solid fa-cat')),dbc.Row(dbc.Label('Data Causal Assistant'))])]),
+                        style={"textAlign": "left"},className='fa-solid fa-cat')),dbc.Row(dbc.Label('Data Causal Wizard'))])]),
         html.Hr(),
         dbc.Row(get_app_tabs()),
         dbc.Row(id='content', children=[])])
