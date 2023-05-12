@@ -1,7 +1,7 @@
 Tusha Module Repository
 ========================
 
-This project is Tusha....
+This project is Tusha: http://www.tusha-analytics.com:8050/
 
 `TODO <http://www.kennethreitz.org/essays/repository-structure-and-python>`_.
 
