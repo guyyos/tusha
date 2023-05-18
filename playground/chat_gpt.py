@@ -1,10 +1,22 @@
 import openai
 
-# Set up the OpenAI API client
-openai.api_key = "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"
+
+import os
+import pprint
+  
+# Get the list of user's
+# environment variables
+env_var = os.environ
+  
+# Print the list of user's
+# environment variables
+
+openai.api_key = os.environ['TUSHA_OPENAI_API_KEY']
+
+print(f'openai.api_key = {openai.api_key}')
 
 # Set up the model and prompt
-model_engine = "text-davinci-003"
+model_engine = 'gpt-3.5-turbo'# "text-davinci-003"
 
 cause = 'smoking'
 effect = 'cancer'
